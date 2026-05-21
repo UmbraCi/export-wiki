@@ -1,12 +1,10 @@
+use crate::app_error::{self};
 use crate::auth::SecretStore;
 use crate::contracts::{ConfluenceUrlTarget, PageNode, SearchResult, SpaceInfo};
 use crate::sidecar::client::SidecarClient;
 use crate::state::AppState;
 use serde::Deserialize;
 use tauri::{State, Url};
-
-const AUTH_REQUIRED: &str = "Authentication required";
-pub const INVALID_CONFLUENCE_URL: &str = "Enter a Confluence page or space URL";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,13 +35,13 @@ struct SidecarSearchResult {
 fn require_sidecar_auth(state: &AppState) -> Result<crate::auth::SidecarAuthConfig, String> {
     let status = state.secret_store.load_status()?;
     if !status.authenticated {
-        return Err(AUTH_REQUIRED.to_string());
+        return Err(app_error::auth_required());
     }
 
     state
         .secret_store
         .load_sidecar_auth()?
-        .ok_or_else(|| AUTH_REQUIRED.to_string())
+        .ok_or_else(|| app_error::auth_required())
 }
 
 pub(crate) fn map_spaces_from_payload(payload: &serde_json::Value) -> Result<Vec<SpaceInfo>, String> {
@@ -108,12 +106,12 @@ pub(crate) fn map_search_results_from_payload(
 pub fn parse_confluence_url(url: &str) -> Result<ConfluenceUrlTarget, String> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
-        return Err(INVALID_CONFLUENCE_URL.to_string());
+        return Err(app_error::invalid_confluence_url());
     }
 
-    let parsed = Url::parse(trimmed).map_err(|_| INVALID_CONFLUENCE_URL.to_string())?;
+    let parsed = Url::parse(trimmed).map_err(|_| app_error::invalid_confluence_url())?;
     if parsed.scheme() != "https" && parsed.scheme() != "http" {
-        return Err(INVALID_CONFLUENCE_URL.to_string());
+        return Err(app_error::invalid_confluence_url());
     }
 
     let segments: Vec<&str> = parsed
@@ -162,7 +160,7 @@ pub fn parse_confluence_url(url: &str) -> Result<ConfluenceUrlTarget, String> {
         }
     }
 
-    Err(INVALID_CONFLUENCE_URL.to_string())
+    Err(app_error::invalid_confluence_url())
 }
 
 #[tauri::command]
@@ -251,7 +249,7 @@ mod tests {
 
     #[test]
     fn unauthenticated_guard_message_is_stable() {
-        assert_eq!(AUTH_REQUIRED, "Authentication required");
+        assert!(app_error::auth_required().contains(app_error::codes::AUTH_REQUIRED));
     }
 
     #[test]
@@ -320,6 +318,6 @@ mod tests {
     fn rejects_non_confluence_urls() {
         let error = parse_confluence_url("https://example.com/docs/page").expect_err("invalid url");
 
-        assert_eq!(error, INVALID_CONFLUENCE_URL);
+        assert_eq!(error, app_error::invalid_confluence_url());
     }
 }

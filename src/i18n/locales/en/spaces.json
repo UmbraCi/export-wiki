@@ -1,0 +1,34 @@
+{
+  "search": {
+    "label": "Search pages",
+    "placeholder": "Search by page title"
+  },
+  "url": {
+    "label": "Open from URL",
+    "placeholder": "https://example.atlassian.net/wiki/spaces/ENG/pages/123456"
+  },
+  "results": {
+    "title": "Search Results",
+    "count_one": "{{count}} result",
+    "count_other": "{{count}} results",
+    "none": "No pages found"
+  },
+  "spaces": {
+    "title": "Spaces",
+    "viewing": "Viewing {{spaceKey}}",
+    "select": "Select a space"
+  },
+  "pages": {
+    "title": "Pages",
+    "selectedInSpace": "{{count}} selected in {{spaceKey}}",
+    "selectSpace": "Select a space to browse pages",
+    "selectAria": "Select {{title}}"
+  },
+  "selected": {
+    "title": "Selected Pages",
+    "count_one": "{{count}} page selected",
+    "count_other": "{{count}} pages selected",
+    "clear": "Clear selection",
+    "empty": "Select pages from the tree to preview your export selection."
+  }
+}

@@ -75,7 +75,9 @@ export interface ExportProgressEvent {
   status: 'queued' | 'fetching' | 'converting' | 'writing' | 'complete' | 'failed'
   progress: number
   stats: ExportStats
-  message: string
+  messageKey?: string
+  messageParams?: Record<string, string | number>
+  message?: string
 }
 
 export interface SyncSettings {

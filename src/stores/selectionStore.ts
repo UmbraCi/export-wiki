@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api } from '../lib/api'
 import type { PageNode, SearchResult, SpaceInfo } from '../lib/contracts'
+import { getErrorCode, translateInvokeError } from '../i18n/backend'
 
 interface SelectionState {
   spaces: SpaceInfo[]
@@ -15,6 +16,7 @@ interface SelectionState {
   isLoadingPages: boolean
   isSearching: boolean
   error: string | null
+  errorCode: string | null
 
   fetchSpaces: () => Promise<void>
   fetchPageTree: (spaceKey: string) => Promise<void>
@@ -27,6 +29,13 @@ interface SelectionState {
   selectSearchResult: (result: SearchResult) => void
   setUrlInput: (url: string) => void
   navigateFromUrl: (url: string) => Promise<void>
+}
+
+function setSelectionError(error: unknown) {
+  return {
+    error: translateInvokeError(error),
+    errorCode: getErrorCode(error),
+  }
 }
 
 export const useSelectionStore = create<SelectionState>((set, get) => ({
@@ -42,19 +51,20 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
   isLoadingPages: false,
   isSearching: false,
   error: null,
+  errorCode: null,
 
   fetchSpaces: async () => {
-    set({ isLoadingSpaces: true, error: null })
+    set({ isLoadingSpaces: true, error: null, errorCode: null })
     try {
       const spaces = await api.getSpaces()
       set({ spaces, isLoadingSpaces: false })
     } catch (err) {
-      set({ error: String(err), isLoadingSpaces: false })
+      set({ ...setSelectionError(err), isLoadingSpaces: false })
     }
   },
 
   fetchPageTree: async (spaceKey) => {
-    set({ isLoadingPages: true, error: null })
+    set({ isLoadingPages: true, error: null, errorCode: null })
     try {
       const pages = await api.getPageTree(spaceKey)
       set((state) => ({
@@ -62,7 +72,7 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
         isLoadingPages: false,
       }))
     } catch (err) {
-      set({ error: String(err), isLoadingPages: false })
+      set({ ...setSelectionError(err), isLoadingPages: false })
     }
   },
 
@@ -105,16 +115,16 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
   searchPages: async (query) => {
     const trimmed = query.trim()
     if (!trimmed) {
-      set({ searchResults: [], error: null })
+      set({ searchResults: [], error: null, errorCode: null })
       return
     }
 
-    set({ isSearching: true, error: null, searchQuery: trimmed })
+    set({ isSearching: true, error: null, errorCode: null, searchQuery: trimmed })
     try {
       const searchResults = await api.searchPages(trimmed)
       set({ searchResults, isSearching: false })
     } catch (err) {
-      set({ error: String(err), isSearching: false })
+      set({ ...setSelectionError(err), isSearching: false })
     }
   },
 
@@ -138,7 +148,7 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
       return
     }
 
-    set({ error: null, urlInput: trimmed })
+    set({ error: null, errorCode: null, urlInput: trimmed })
     try {
       const target = await api.parseConfluenceUrl(trimmed)
       const { setActiveSpaceKey, togglePageSelection, selectedPageIds } = get()
@@ -151,7 +161,7 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
         togglePageSelection(target.pageId, target.pageId)
       }
     } catch (err) {
-      set({ error: String(err) })
+      set(setSelectionError(err))
     }
   },
 }))

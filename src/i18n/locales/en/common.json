@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "Confluence Wiki Exporter",
+    "subtitle": "Export your wiki content seamlessly",
+    "name": "Export Wiki",
+    "tagline": "Confluence Publisher"
+  },
+  "nav": {
+    "authentication": "Authentication",
+    "spaces": "Spaces",
+    "pages": "Pages",
+    "settings": "Settings",
+    "signInFirst": "Sign in first to access this section"
+  },
+  "status": {
+    "ready": "Ready",
+    "authenticated": "Authenticated",
+    "notConnected": "Not connected",
+    "ssoInProgress": "SSO login in progress"
+  },
+  "theme": {
+    "light": "Light mode",
+    "dark": "Dark mode",
+    "system": "Follow system"
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "go": "Go",
+    "reset": "Reset",
+    "saveSettings": "Save Settings",
+    "logout": "Logout",
+    "search": "Search",
+    "searching": "Searching…",
+    "choose": "Choose",
+    "selected": "Selected"
+  },
+  "select": {
+    "placeholder": "Select..."
+  },
+  "empty": {
+    "noContent": "No content"
+  },
+  "version": "Version {{version}}",
+  "authMethod": {
+    "sso": "SSO",
+    "apiToken": "API Token",
+    "cookie": "Session Cookie",
+    "unknown": "Unknown"
+  },
+  "language": {
+    "label": "Language",
+    "description": "Choose the display language for the app",
+    "en": "English",
+    "zhCN": "简体中文"
+  }
+}

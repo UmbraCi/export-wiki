@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri::WindowEvent;
 
+use crate::app_error::{self, AppError, codes};
 use crate::auth::{SecretStore, SidecarAuthConfig, SsoAuthConfig};
 use crate::contracts::{AuthMethod, AuthStatus, SsoSessionInfo, SsoSessionStatus};
 use crate::sidecar::client::SidecarClient;
@@ -13,16 +14,11 @@ use crate::state::AppState;
 
 pub const SSO_WINDOW_LABEL: &str = "confluence-sso";
 
-const COOKIE_FALLBACK_MSG: &str =
-    "SSO completed, but this platform did not expose reusable session credentials. Use manual API Token or session fallback.";
-
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
 const RETURN_COOLDOWN: Duration = Duration::from_secs(3);
 const SESSION_PROBE_INTERVAL: Duration = Duration::from_secs(3);
 const POST_OAUTH_SETTLE: Duration = Duration::from_secs(5);
 const MAX_RETURN_ATTEMPTS: u8 = 5;
-const WIKI_SESSION_REQUIRED_MSG: &str =
-    "Please open a Confluence page in the login window first (use Open target page).";
 
 const RETURN_URL_PARAMS: &[&str] = &[
     "service",
@@ -387,7 +383,7 @@ pub fn is_login_success_url(url: &str, confluence_host: &str) -> bool {
 /// Resolve the WebView entry URL and the Confluence host used for login-success detection.
 pub fn resolve_sso_entry_url(base_url: &str) -> Result<(Url, String), String> {
     let (stored_base, host) = crate::auth::base_url::normalize_confluence_base_url_parts(base_url)?;
-    let parsed = Url::parse(base_url.trim()).map_err(|_| "Confluence URL must start with https://".to_string())?;
+    let parsed = Url::parse(base_url.trim()).map_err(|_| app_error::invalid_https_url())?;
 
     let path = parsed.path();
     let has_content_path = path.len() > 1;
@@ -953,7 +949,7 @@ fn extract_reusable_cookies(
     }
 
     if header.is_empty() {
-        return Err(COOKIE_FALLBACK_MSG.to_string());
+        return Err(AppError::new(codes::SSO_COOKIE_FALLBACK).into_invoke_error());
     }
 
     Ok(header)
@@ -961,7 +957,7 @@ fn extract_reusable_cookies(
 
 fn validate_wiki_session_for_completion(has_wiki_session: bool) -> Result<(), String> {
     if !has_wiki_session {
-        return Err(WIKI_SESSION_REQUIRED_MSG.to_string());
+        return Err(AppError::new(codes::WIKI_SESSION_REQUIRED).into_invoke_error());
     }
     Ok(())
 }
@@ -1262,7 +1258,7 @@ pub fn navigate_sso_window(
         let parsed = Url::parse(url.trim())
             .map_err(|error| format!("invalid navigation URL: {error}"))?;
         if parsed.scheme() != "https" {
-            return Err("Navigation URL must start with https://".to_string());
+            return Err(AppError::new(codes::NAVIGATION_HTTPS_REQUIRED).into_invoke_error());
         }
         sso_diag!("navigate_sso_window url={parsed}");
         window
@@ -1777,7 +1773,7 @@ mod tests {
         assert!(validate_wiki_session_for_completion(true).is_ok());
         assert_eq!(
             validate_wiki_session_for_completion(false).expect_err("missing session"),
-            WIKI_SESSION_REQUIRED_MSG
+            AppError::new(codes::WIKI_SESSION_REQUIRED).into_invoke_error()
         );
     }
 }

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { listen } from '@tauri-apps/api/event'
 import { api } from '../lib/api'
 import type { AuthStatus, ManualAuthConfig, SsoSessionInfo, SsoSessionStatus } from '../lib/contracts'
+import { translateInvokeError } from '../i18n/backend'
+import i18n from '../i18n'
 
 export type ManualAuthMode = ManualAuthConfig['method']
 
@@ -27,15 +29,29 @@ function authDiag(message: string, details?: Record<string, unknown>) {
   }
 }
 
+function clientError(code: string): string {
+  return i18n.t(`errors:${code}`)
+}
+
 function sanitizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  if (message.includes('manual API Token or session fallback')) {
-    return message
+  const parsedCode = (() => {
+    try {
+      const message = error instanceof Error ? error.message : String(error)
+      const parsed = JSON.parse(message) as { code?: string }
+      return parsed.code ?? null
+    } catch {
+      return null
+    }
+  })()
+
+  if (
+    parsedCode === 'SSO_COOKIE_FALLBACK' ||
+    parsedCode === 'COOKIE_VALIDATION_FAILED'
+  ) {
+    return translateInvokeError(error)
   }
-  if (message.includes('Cookie validation failed') || message.includes('Cookie authentication')) {
-    return message
-  }
-  return message.replace(/token|cookie|password|secret/gi, '[redacted]')
+
+  return translateInvokeError(error)
 }
 
 function cookieNamesFromHeader(header: string): string[] {
@@ -116,7 +132,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (!baseUrl.startsWith('https://')) {
       set({
-        error: 'Confluence URL must start with https://',
+        error: clientError('CLIENT_INVALID_HTTPS_URL'),
         isLoading: false,
       })
       return
@@ -214,13 +230,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (config.method === 'cookie' && !config.baseUrl) {
       authDiag('saveManualAuth blocked: missing baseUrl')
-      set({ error: 'Confluence URL is required before saving session cookie', isLoading: false })
+      set({ error: clientError('CLIENT_BASE_URL_REQUIRED_COOKIE'), isLoading: false })
       return
     }
 
     if (config.method === 'cookie' && !config.cookie?.trim()) {
       authDiag('saveManualAuth blocked: empty cookie')
-      set({ error: 'Session cookie value is required', isLoading: false })
+      set({ error: clientError('CLIENT_SESSION_COOKIE_REQUIRED'), isLoading: false })
       return
     }
 
@@ -266,7 +282,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   reconnectWithSso: async () => {
     const preservedBaseUrl = get().status.baseUrl ?? get().baseUrl
     if (!preservedBaseUrl) {
-      set({ error: 'Confluence URL is required before signing in again' })
+      set({ error: clientError('CLIENT_BASE_URL_REQUIRED_SSO') })
       return
     }
 
@@ -309,7 +325,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (!baseUrl) {
       authDiag('updateSessionCookie blocked: no saved baseUrl')
-      set({ error: 'No saved Confluence URL to update' })
+      set({ error: clientError('CLIENT_NO_SAVED_BASE_URL') })
       return
     }
 

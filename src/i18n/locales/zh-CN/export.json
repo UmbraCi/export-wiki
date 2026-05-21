@@ -1,0 +1,41 @@
+{
+  "panel": {
+    "title": "导出",
+    "subtitle": "将所选页面导出为 Obsidian 兼容的 Markdown"
+  },
+  "fields": {
+    "outputDir": "输出目录",
+    "outputDirPlaceholder": "~/Documents/confluence-export"
+  },
+  "attachments": {
+    "label": "包含附件",
+    "description": "将图片和文件下载到 attachments 文件夹"
+  },
+  "format": {
+    "label": "导出格式",
+    "markdown": "Markdown (.md)",
+    "html": "HTML (.html)"
+  },
+  "button": {
+    "export_one": "导出 {{count}} 个页面",
+    "export_other": "导出 {{count}} 个页面"
+  },
+  "progress": {
+    "title": "导出进度",
+    "subtitle": "查看导出状态、统计和日志",
+    "progressLabel": "进度",
+    "logTitle": "导出日志",
+    "emptyLog": "开始导出后可在此查看进度日志",
+    "stats": {
+      "total": "总计",
+      "exported": "已导出",
+      "skipped": "已跳过",
+      "failed": "失败",
+      "files": "文件"
+    }
+  },
+  "queued_one": "已将 {{count}} 个页面加入导出队列",
+  "queued_other": "已将 {{count}} 个页面加入导出队列",
+  "writing": "正在写入 {{filename}}",
+  "complete": "导出完成：已导出 {{exported}}，失败 {{failed}}，附件 {{attachments}}"
+}

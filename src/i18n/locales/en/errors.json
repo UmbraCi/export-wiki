@@ -1,0 +1,19 @@
+{
+  "AUTH_REQUIRED": "Authentication required",
+  "INVALID_CONFLUENCE_URL": "Enter a Confluence page or space URL",
+  "INVALID_HTTPS_URL": "Confluence URL must start with https://",
+  "EMPTY_SELECTION": "Select at least one page to export",
+  "OUTPUT_DIR_REQUIRED": "Select an output directory",
+  "API_TOKEN_REQUIRED": "API token authentication requires username and API token",
+  "COOKIE_REQUIRED": "Cookie authentication requires a cookie value",
+  "COOKIE_VALIDATION_FAILED": "Cookie validation failed: {{detail}}. Copy all wiki cookies (include seraph.confluence), not only JSESSIONID.",
+  "SSO_COOKIE_FALLBACK": "SSO completed, but this platform did not expose reusable session credentials. Use manual API Token or session fallback.",
+  "WIKI_SESSION_REQUIRED": "Please open a Confluence page in the login window first (use Open target page).",
+  "SSO_REQUIRES_SESSION_COOKIES": "SSO authentication requires session cookies",
+  "NAVIGATION_HTTPS_REQUIRED": "Navigation URL must start with https://",
+  "CLIENT_INVALID_HTTPS_URL": "Confluence URL must start with https://",
+  "CLIENT_BASE_URL_REQUIRED_COOKIE": "Confluence URL is required before saving session cookie",
+  "CLIENT_SESSION_COOKIE_REQUIRED": "Session cookie value is required",
+  "CLIENT_NO_SAVED_BASE_URL": "No saved Confluence URL to update",
+  "CLIENT_BASE_URL_REQUIRED_SSO": "Confluence URL is required before signing in again"
+}

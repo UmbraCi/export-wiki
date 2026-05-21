@@ -1,0 +1,41 @@
+{
+  "panel": {
+    "title": "Export",
+    "subtitle": "Export selected pages to Obsidian-compatible Markdown"
+  },
+  "fields": {
+    "outputDir": "Output Directory",
+    "outputDirPlaceholder": "~/Documents/confluence-export"
+  },
+  "attachments": {
+    "label": "Include Attachments",
+    "description": "Download images and files into an attachments folder"
+  },
+  "format": {
+    "label": "Export Format",
+    "markdown": "Markdown (.md)",
+    "html": "HTML (.html)"
+  },
+  "button": {
+    "export_one": "Export {{count}} Page",
+    "export_other": "Export {{count}} Pages"
+  },
+  "progress": {
+    "title": "Export Progress",
+    "subtitle": "Track export status, stats, and logs",
+    "progressLabel": "Progress",
+    "logTitle": "Export Log",
+    "emptyLog": "Start an export to see progress logs",
+    "stats": {
+      "total": "Total",
+      "exported": "Exported",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "files": "Files"
+    }
+  },
+  "queued_one": "Queued {{count}} page for export",
+  "queued_other": "Queued {{count}} pages for export",
+  "writing": "Writing {{filename}}",
+  "complete": "Export complete: {{exported}} exported, {{failed}} failed, {{attachments}} attachments"
+}

@@ -12,4 +12,4 @@ export const useNavStore = create<NavState>((set) => ({
   setActiveView: (activeView) => set({ activeView }),
 }))
 
-export const authRequiredViews: AppView[] = ['spaces', 'pages', 'settings']
+export const authRequiredViews: AppView[] = ['spaces', 'pages']

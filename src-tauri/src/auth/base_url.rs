@@ -1,3 +1,4 @@
+use crate::app_error;
 use tauri::Url;
 
 /// Normalize any Confluence URL (origin, dashboard, or viewpage link) to `https://{host}`.
@@ -10,13 +11,13 @@ pub fn normalize_confluence_base_url(base_url: &str) -> Result<String, String> {
 pub fn normalize_confluence_base_url_parts(base_url: &str) -> Result<(String, String), String> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
-        return Err("Confluence URL must start with https://".to_string());
+        return Err(app_error::invalid_https_url());
     }
 
     let parsed =
-        Url::parse(trimmed).map_err(|_| "Confluence URL must start with https://".to_string())?;
+        Url::parse(trimmed).map_err(|_| app_error::invalid_https_url())?;
     if parsed.scheme() != "https" {
-        return Err("Confluence URL must start with https://".to_string());
+        return Err(app_error::invalid_https_url());
     }
 
     let host = parsed
@@ -56,6 +57,6 @@ mod tests {
         let error = normalize_confluence_base_url("http://wiki.example.com")
             .expect_err("http should fail");
 
-        assert_eq!(error, "Confluence URL must start with https://");
+        assert_eq!(error, app_error::invalid_https_url());
     }
 }

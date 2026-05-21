@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { listen } from '@tauri-apps/api/event'
 import { api } from '../lib/api'
 import type { ExportOptions, ExportProgressEvent, ExportStats } from '../lib/contracts'
+import { translateInvokeError, translateProgressEvent } from '../i18n/backend'
 
 export interface ExportLogEntry {
   timestamp: string
@@ -14,17 +15,9 @@ export type ExportPanelOptions = Pick<
   'outputDir' | 'includeAttachments' | 'format'
 >
 
-function sanitizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.replace(/token|cookie|password|secret/gi, '[redacted]')
-}
-
 function logLevelForStatus(status: ExportProgressEvent['status']): ExportLogEntry['level'] {
   if (status === 'failed') {
     return 'error'
-  }
-  if (status === 'complete') {
-    return 'info'
   }
   return 'info'
 }
@@ -87,7 +80,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
           {
             timestamp: new Date().toLocaleTimeString(),
             level: logLevelForStatus(payload.status),
-            message: payload.message,
+            message: translateProgressEvent(payload),
           },
         ],
       }))
@@ -102,15 +95,16 @@ export const useExportStore = create<ExportState>((set, get) => ({
       })
       set({ isExporting: false, progress: 100 })
     } catch (err) {
+      const message = translateInvokeError(err)
       set({
-        error: sanitizeError(err),
+        error: message,
         isExporting: false,
         logs: [
           ...get().logs,
           {
             timestamp: new Date().toLocaleTimeString(),
             level: 'error',
-            message: sanitizeError(err),
+            message,
           },
         ],
       })

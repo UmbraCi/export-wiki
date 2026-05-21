@@ -1,30 +1,21 @@
+import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useConfigStore } from '../../stores/configStore'
 import { useExportStore } from '../../stores/exportStore'
 import { useSelectionStore } from '../../stores/selectionStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useNavStore } from '../../stores/navStore'
+import { formatAuthMethod } from '../../i18n/backend'
+import type { AppLocale } from '../../i18n'
 import Button from '../common/Button'
 import Input from '../common/Input'
 import Select from '../common/Select'
-import { useEffect } from 'react'
-
-function formatAuthMethod(method: string | null | undefined): string {
-  switch (method) {
-    case 'sso':
-      return 'SSO'
-    case 'api_token':
-      return 'API Token'
-    case 'cookie':
-      return 'Session Cookie'
-    default:
-      return 'Unknown'
-  }
-}
 
 function SettingsPanel() {
+  const { t } = useTranslation(['settings', 'common', 'auth', 'export'])
   const { status, logout, reconnectWithSso, isLoading: authLoading } = useAuthStore()
   const setActiveView = useNavStore((s) => s.setActiveView)
-  const { config, loadConfig, saveConfig, updateSyncSettings, isLoading } = useConfigStore()
+  const { config, loadConfig, saveConfig, updateSyncSettings, setLocale, isLoading } = useConfigStore()
   const { setOptions } = useExportStore()
   const selectedPageIds = useSelectionStore((s) => s.selectedPageIds)
 
@@ -56,30 +47,39 @@ function SettingsPanel() {
   return (
     <div className="max-w-xl mx-auto animate-fade-in stagger-2">
       <div className="card-app">
-        {/* Header */}
         <div className="px-8 py-6 border-b border-border">
-          <h2 className="font-display text-xl font-semibold text-text-primary">Settings</h2>
-          <p className="text-sm text-text-secondary mt-2">Configure export options</p>
+          <h2 className="font-display text-xl font-semibold text-text-primary">{t('settings:title')}</h2>
+          <p className="text-sm text-text-secondary mt-2">{t('settings:subtitle')}</p>
         </div>
 
-        {/* Content */}
         <div className="p-8 space-y-6">
+          <Select
+            label={t('common:language.label')}
+            options={[
+              { value: 'en', label: t('common:language.en') },
+              { value: 'zh-CN', label: t('common:language.zhCN') },
+            ]}
+            value={config.locale}
+            onChange={(val) => void setLocale(val as AppLocale)}
+          />
+          <p className="text-xs text-text-muted -mt-4">{t('common:language.description')}</p>
+
           <div className="space-y-4 pb-6 border-b border-border">
             <div>
-              <h3 className="text-sm font-semibold text-text-primary">Account</h3>
+              <h3 className="text-sm font-semibold text-text-primary">{t('settings:account.title')}</h3>
               <p className="text-xs text-text-muted mt-1">
-                Manage Confluence sign-in, session cookies, and SSO.
+                {t('settings:account.subtitle')}
               </p>
             </div>
 
             <div className="rounded-xl bg-bg-secondary border border-border px-4 py-3 space-y-2">
-              <p className="text-sm text-text-muted">Confluence URL</p>
+              <p className="text-sm text-text-muted">{t('auth:fields.confluenceUrl')}</p>
               <p className="text-sm text-text-primary font-medium break-all">
                 {status.baseUrl ?? '—'}
               </p>
-              <p className="text-sm text-text-muted pt-1">Authentication</p>
+              <p className="text-sm text-text-muted pt-1">{t('auth:fields.authenticationMethod')}</p>
               <p className="text-sm text-text-primary font-medium">
-                {formatAuthMethod(status.method)}
+                {formatAuthMethod(status.method, t)}
               </p>
             </div>
 
@@ -88,29 +88,29 @@ function SettingsPanel() {
                 variant="secondary"
                 onClick={() => setActiveView('authentication')}
               >
-                Open authentication
+                {t('settings:account.openAuth')}
               </Button>
               <Button onClick={() => void reconnectWithSso()} loading={authLoading}>
-                Sign in again (SSO)
+                {t('auth:sso.signInAgain')}
               </Button>
               <Button variant="secondary" onClick={() => void logout()} loading={authLoading}>
-                Logout
+                {t('common:buttons.logout')}
               </Button>
             </div>
           </div>
 
           <Input
-            label="Output Directory"
-            placeholder="~/Documents/confluence-export"
+            label={t('export:fields.outputDir')}
+            placeholder={t('export:fields.outputDirPlaceholder')}
             value={config.defaultOutputDir}
             onChange={(val) => saveConfig({ ...config, defaultOutputDir: val })}
           />
 
           <Select
-            label="Export Format"
+            label={t('export:format.label')}
             options={[
-              { value: 'markdown', label: 'Markdown (.md)' },
-              { value: 'html', label: 'HTML (.html)' },
+              { value: 'markdown', label: t('export:format.markdown') },
+              { value: 'html', label: t('export:format.html') },
             ]}
             value={config.defaultFormat}
             onChange={(val) => saveConfig({ ...config, defaultFormat: val as 'markdown' | 'html' })}
@@ -118,14 +118,14 @@ function SettingsPanel() {
 
           <div className="space-y-4 pt-4 border-t border-border">
             <Toggle
-              label="Include Attachments"
-              description="Download and include page attachments"
+              label={t('settings:toggles.includeAttachments.label')}
+              description={t('settings:toggles.includeAttachments.description')}
               checked={config.includeAttachmentsDefault}
               onChange={(checked) => saveConfig({ ...config, includeAttachmentsDefault: checked })}
             />
             <Toggle
-              label="Skip Unchanged"
-              description="Only export pages modified since last run"
+              label={t('settings:toggles.skipUnchanged.label')}
+              description={t('settings:toggles.skipUnchanged.description')}
               checked={config.skipUnchangedDefault}
               onChange={(checked) => saveConfig({ ...config, skipUnchangedDefault: checked })}
             />
@@ -133,15 +133,15 @@ function SettingsPanel() {
 
           <div className="space-y-4 pt-6 border-t border-border">
             <div>
-              <h3 className="text-sm font-semibold text-text-primary">Background Sync</h3>
+              <h3 className="text-sm font-semibold text-text-primary">{t('settings:sync.title')}</h3>
               <p className="text-xs text-text-muted mt-1">
-                Periodically re-export selected pages while the app is open.
+                {t('settings:sync.subtitle')}
               </p>
             </div>
 
             <Toggle
-              label="Enable Background Sync"
-              description="Off by default — turn on to schedule automatic exports"
+              label={t('settings:sync.enable.label')}
+              description={t('settings:sync.enable.description')}
               checked={sync.enabled}
               onChange={(checked) => updateSyncSettings({ enabled: checked })}
             />
@@ -149,7 +149,7 @@ function SettingsPanel() {
             <div className={sync.enabled ? 'space-y-4' : 'space-y-4 opacity-50 pointer-events-none'}>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-text-secondary">
-                  Sync Interval (minutes)
+                  {t('settings:sync.intervalLabel')}
                 </label>
                 <input
                   type="number"
@@ -164,29 +164,28 @@ function SettingsPanel() {
               </div>
 
               <div className="text-sm text-text-secondary">
-                <span className="font-medium text-text-primary">Selected pages:</span>{' '}
+                <span className="font-medium text-text-primary">{t('settings:sync.selectedPages')}</span>{' '}
                 {selectedCount === 0
-                  ? 'None — select pages in the browser before enabling sync'
-                  : `${selectedCount} page${selectedCount === 1 ? '' : 's'}`}
+                  ? t('settings:sync.selectedNone')
+                  : t('settings:sync.selectedCount', { count: selectedCount })}
               </div>
 
               <Input
-                label="Sync Output Directory"
-                placeholder={config.defaultOutputDir || '~/Documents/confluence-export'}
+                label={t('settings:sync.outputDir')}
+                placeholder={config.defaultOutputDir || t('export:fields.outputDirPlaceholder')}
                 value={sync.outputDir}
                 onChange={(val) => updateSyncSettings({ outputDir: val })}
               />
             </div>
 
             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
-              Background sync uses the saved credential and runs only while the desktop app is open.
+              {t('settings:sync.warning')}
             </p>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-8 py-6 bg-bg-secondary border-t border-border flex justify-end">
-          <Button onClick={handleSave} loading={isLoading}>Save Settings</Button>
+          <Button onClick={handleSave} loading={isLoading}>{t('common:buttons.saveSettings')}</Button>
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
 import { defaultSyncSettings, type SyncSettings } from '../lib/contracts'
+import { normalizeLocale, setAppLocale, type AppLocale } from '../i18n'
+import { updateWindowTitle } from '../i18n/windowTitle'
 
 export interface Config {
   defaultOutputDir: string
@@ -8,6 +10,7 @@ export interface Config {
   includeAttachmentsDefault: boolean
   skipUnchangedDefault: boolean
   lastUsedUrl?: string
+  locale: AppLocale
   sync: SyncSettings
 }
 
@@ -16,6 +19,7 @@ export const defaultConfig: Config = {
   defaultFormat: 'markdown',
   includeAttachmentsDefault: true,
   skipUnchangedDefault: false,
+  locale: 'en',
   sync: defaultSyncSettings,
 }
 
@@ -28,6 +32,12 @@ interface ConfigState {
   saveConfig: (config: Config) => Promise<void>
   updateConfig: (updates: Partial<Config>) => void
   updateSyncSettings: (updates: Partial<SyncSettings>) => void
+  setLocale: (locale: AppLocale) => Promise<void>
+}
+
+async function applyLocale(locale: AppLocale): Promise<void> {
+  await setAppLocale(locale)
+  await updateWindowTitle()
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -40,8 +50,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     try {
       const loaded = await invoke<Config | null>('load_config')
       const config: Config = loaded
-        ? { ...defaultConfig, ...loaded, sync: { ...defaultSyncSettings, ...loaded.sync } }
+        ? {
+            ...defaultConfig,
+            ...loaded,
+            locale: normalizeLocale(loaded.locale),
+            sync: { ...defaultSyncSettings, ...loaded.sync },
+          }
         : defaultConfig
+      await applyLocale(config.locale)
       set({ config, isLoading: false })
     } catch (err) {
       set({ error: String(err), isLoading: false })
@@ -52,6 +68,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       await invoke('save_config', { config })
+      await applyLocale(config.locale)
       set({ config, isLoading: false })
     } catch (err) {
       set({ error: String(err), isLoading: false })
@@ -70,5 +87,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (config) {
       set({ config: { ...config, sync: { ...config.sync, ...updates } } })
     }
+  },
+
+  setLocale: async (locale) => {
+    const { config, saveConfig } = get()
+    if (!config) return
+    await saveConfig({ ...config, locale })
   },
 }))

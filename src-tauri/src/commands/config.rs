@@ -19,6 +19,12 @@ pub struct Config {
     pub last_used_url: Option<String>,
     #[serde(default)]
     pub sync: SyncSettings,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+}
+
+fn default_locale() -> String {
+    "en".to_string()
 }
 
 fn default_format() -> String {

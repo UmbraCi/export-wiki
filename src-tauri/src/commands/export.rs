@@ -4,14 +4,16 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+use crate::app_error::{self, codes, AppError};
 use crate::auth::SecretStore;
 use crate::contracts::{ExportFormat, ExportOptions, ExportProgressEvent, ExportStats};
 use crate::export::file_writer::{ExportedAttachment, ExportedPage, write_exported_page};
 use crate::sidecar::client::SidecarClient;
 use crate::state::AppState;
 
-const EMPTY_SELECTION: &str = "Select at least one page to export";
-const AUTH_REQUIRED: &str = "Authentication required";
+use serde_json::json;
+
+const EMPTY_SELECTION: &str = codes::EMPTY_SELECTION;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,13 +58,13 @@ pub(crate) fn redact_secrets(message: &str) -> String {
 fn require_sidecar_auth(state: &AppState) -> Result<crate::auth::SidecarAuthConfig, String> {
     let status = state.secret_store.load_status()?;
     if !status.authenticated {
-        return Err(AUTH_REQUIRED.to_string());
+        return Err(app_error::auth_required());
     }
 
     state
         .secret_store
         .load_sidecar_auth()?
-        .ok_or_else(|| AUTH_REQUIRED.to_string())
+        .ok_or_else(|| app_error::auth_required())
 }
 
 fn map_exported_page(page: SidecarExportedPage) -> ExportedPage {
@@ -107,7 +109,7 @@ pub async fn export_pages(
     state: State<'_, AppState>,
 ) -> Result<ExportPagesAck, String> {
     if options.page_ids.is_empty() {
-        return Err(EMPTY_SELECTION.to_string());
+        return Err(AppError::new(EMPTY_SELECTION).into_invoke_error());
     }
 
     let format = match options.format {
@@ -116,7 +118,7 @@ pub async fn export_pages(
     };
 
     if options.output_dir.trim().is_empty() {
-        return Err("Select an output directory".to_string());
+        return Err(AppError::new(codes::OUTPUT_DIR_REQUIRED).into_invoke_error());
     }
 
     let auth = require_sidecar_auth(&state)?;
@@ -140,7 +142,9 @@ pub async fn export_pages(
             status: "queued".into(),
             progress: 0,
             stats: stats.clone(),
-            message: format!("Queued {total} page(s) for export"),
+            message_key: Some("export.queued".into()),
+            message_params: Some(json!({ "count": total })),
+            message: None,
         },
     )?;
 
@@ -167,7 +171,9 @@ pub async fn export_pages(
                 status: "writing".into(),
                 progress: progress_before_write,
                 stats: stats.clone(),
-                message: format!("Writing {}", page.filename),
+                message_key: Some("export.writing".into()),
+                message_params: Some(json!({ "filename": page.filename })),
+                message: None,
             },
         )?;
 
@@ -185,7 +191,9 @@ pub async fn export_pages(
                         status: "failed".into(),
                         progress: (page_number * 100) / total.max(1),
                         stats: stats.clone(),
-                        message: redact_secrets(&error),
+                        message_key: None,
+                        message_params: None,
+                        message: Some(redact_secrets(&error)),
                     },
                 )?;
             }
@@ -203,10 +211,13 @@ pub async fn export_pages(
             status: "complete".into(),
             progress: 100,
             stats: stats.clone(),
-            message: format!(
-                "Export complete: {} exported, {} failed, {} attachments",
-                stats.exported, stats.failed, stats.attachments
-            ),
+            message_key: Some("export.complete".into()),
+            message_params: Some(json!({
+                "exported": stats.exported,
+                "failed": stats.failed,
+                "attachments": stats.attachments,
+            })),
+            message: None,
         },
     )?;
 
@@ -219,7 +230,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_page_selection_message_is_stable() {
-        assert_eq!(EMPTY_SELECTION, "Select at least one page to export");
+        assert_eq!(EMPTY_SELECTION, codes::EMPTY_SELECTION);
     }
 
     #[test]

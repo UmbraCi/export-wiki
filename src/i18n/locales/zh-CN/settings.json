@@ -1,0 +1,34 @@
+{
+  "title": "设置",
+  "subtitle": "配置导出选项",
+  "account": {
+    "title": "账户",
+    "subtitle": "管理 Confluence 登录、会话 Cookie 和 SSO。",
+    "openAuth": "打开认证"
+  },
+  "toggles": {
+    "includeAttachments": {
+      "label": "包含附件",
+      "description": "下载并包含页面附件"
+    },
+    "skipUnchanged": {
+      "label": "跳过未变更",
+      "description": "仅导出上次运行后有修改的页面"
+    }
+  },
+  "sync": {
+    "title": "后台同步",
+    "subtitle": "应用打开时定期重新导出所选页面。",
+    "enable": {
+      "label": "启用后台同步",
+      "description": "默认关闭 — 开启后可按计划自动导出"
+    },
+    "intervalLabel": "同步间隔（分钟）",
+    "selectedPages": "已选页面：",
+    "selectedNone": "无 — 启用同步前请先在浏览器中选择页面",
+    "selectedCount_one": "{{count}} 个页面",
+    "selectedCount_other": "{{count}} 个页面",
+    "outputDir": "同步输出目录",
+    "warning": "后台同步使用已保存的凭证，且仅在桌面应用打开时运行。"
+  }
+}

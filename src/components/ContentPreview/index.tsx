@@ -1,6 +1,8 @@
+import { useTranslation } from 'react-i18next'
 import { useSelectionStore } from '../../stores/selectionStore'
 
 function ContentPreview() {
+  const { t } = useTranslation('spaces')
   const { selectedPageIds, selectedPageTitles, clearSelection } = useSelectionStore()
 
   const selectedTitles = selectedPageIds.map(
@@ -12,10 +14,10 @@ function ContentPreview() {
       <div className="px-6 py-5 border-b border-border flex items-center justify-between gap-4">
         <div>
           <h3 className="font-display text-lg font-semibold text-text-primary">
-            Selected Pages
+            {t('selected.title')}
           </h3>
           <p className="text-sm text-text-secondary mt-1">
-            {selectedPageIds.length} page{selectedPageIds.length === 1 ? '' : 's'} selected
+            {t('selected.count', { count: selectedPageIds.length })}
           </p>
         </div>
 
@@ -25,7 +27,7 @@ function ContentPreview() {
             onClick={clearSelection}
             className="text-sm text-text-secondary hover:text-text-primary transition-colors"
           >
-            Clear selection
+            {t('selected.clear')}
           </button>
         )}
       </div>
@@ -33,7 +35,7 @@ function ContentPreview() {
       <div className="px-6 py-5">
         {selectedPageIds.length === 0 ? (
           <p className="text-sm text-text-muted">
-            Select pages from the tree to preview your export selection.
+            {t('selected.empty')}
           </p>
         ) : (
           <ul className="space-y-2">

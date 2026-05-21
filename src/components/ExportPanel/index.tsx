@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next'
 import { useExportStore } from '../../stores/exportStore'
 import { useSelectionStore } from '../../stores/selectionStore'
 import Button from '../common/Button'
 import Input from '../common/Input'
 
 function ExportPanel() {
+  const { t } = useTranslation(['export', 'common'])
   const { options, setOptions, startExport, isExporting, error } = useExportStore()
   const { selectedPageIds } = useSelectionStore()
 
@@ -13,16 +15,16 @@ function ExportPanel() {
   return (
     <div className="card-app mt-6 animate-fade-in stagger-5">
       <div className="px-6 py-5 border-b border-border">
-        <h3 className="font-display text-lg font-semibold text-text-primary">Export</h3>
+        <h3 className="font-display text-lg font-semibold text-text-primary">{t('export:panel.title')}</h3>
         <p className="text-sm text-text-secondary mt-1">
-          Export selected pages to Obsidian-compatible Markdown
+          {t('export:panel.subtitle')}
         </p>
       </div>
 
       <div className="px-6 py-5 space-y-5">
         <Input
-          label="Output Directory"
-          placeholder="~/Documents/confluence-export"
+          label={t('export:fields.outputDir')}
+          placeholder={t('export:fields.outputDirPlaceholder')}
           value={options.outputDir}
           onChange={(value) => setOptions({ outputDir: value })}
         />
@@ -42,19 +44,19 @@ function ExportPanel() {
             />
           </button>
           <div className="flex-1">
-            <span className="text-sm font-medium text-text-primary">Include Attachments</span>
+            <span className="text-sm font-medium text-text-primary">{t('export:attachments.label')}</span>
             <span className="block text-xs text-text-muted mt-1">
-              Download images and files into an attachments folder
+              {t('export:attachments.description')}
             </span>
           </div>
         </label>
 
         <div className="space-y-2">
-          <span className="text-sm font-medium text-text-primary">Export Format</span>
+          <span className="text-sm font-medium text-text-primary">{t('export:format.label')}</span>
           <div className="rounded-lg border border-border bg-bg-elevated px-4 py-3 space-y-3">
             {([
-              { value: 'markdown' as const, label: 'Markdown (.md)' },
-              { value: 'html' as const, label: 'HTML (.html)' },
+              { value: 'markdown' as const, label: t('export:format.markdown') },
+              { value: 'html' as const, label: t('export:format.html') },
             ]).map((formatOption) => {
               const selected = options.format === formatOption.value
               return (
@@ -72,7 +74,7 @@ function ExportPanel() {
                       selected ? 'text-accent' : 'text-text-muted'
                     }`}
                   >
-                    {selected ? 'Selected' : 'Choose'}
+                    {selected ? t('common:buttons.selected') : t('common:buttons.choose')}
                   </span>
                 </button>
               )
@@ -90,7 +92,7 @@ function ExportPanel() {
             loading={isExporting}
             disabled={!canExport}
           >
-            Export {selectedPageIds.length} Page{selectedPageIds.length === 1 ? '' : 's'}
+            {t('export:button.export', { count: selectedPageIds.length })}
           </Button>
         </div>
       </div>

@@ -1,0 +1,34 @@
+{
+  "search": {
+    "label": "搜索页面",
+    "placeholder": "按页面标题搜索"
+  },
+  "url": {
+    "label": "从 URL 打开",
+    "placeholder": "https://example.atlassian.net/wiki/spaces/ENG/pages/123456"
+  },
+  "results": {
+    "title": "搜索结果",
+    "count_one": "{{count}} 条结果",
+    "count_other": "{{count}} 条结果",
+    "none": "未找到页面"
+  },
+  "spaces": {
+    "title": "空间",
+    "viewing": "正在查看 {{spaceKey}}",
+    "select": "请选择一个空间"
+  },
+  "pages": {
+    "title": "页面",
+    "selectedInSpace": "在 {{spaceKey}} 中已选 {{count}} 个",
+    "selectSpace": "请选择空间以浏览页面",
+    "selectAria": "选择 {{title}}"
+  },
+  "selected": {
+    "title": "已选页面",
+    "count_one": "已选 {{count}} 个页面",
+    "count_other": "已选 {{count}} 个页面",
+    "clear": "清除选择",
+    "empty": "从页面树中选择页面以预览导出内容。"
+  }
+}

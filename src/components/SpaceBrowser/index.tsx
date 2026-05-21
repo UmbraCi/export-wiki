@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../lib/contracts'
+import { isInvalidConfluenceUrlError } from '../../i18n/backend'
 import { useSelectionStore } from '../../stores/selectionStore'
 import Input from '../common/Input'
 import Button from '../common/Button'
 
 function SpaceBrowser() {
+  const { t } = useTranslation(['spaces', 'common'])
   const {
     spaces,
     pageTrees,
@@ -17,6 +20,7 @@ function SpaceBrowser() {
     isLoadingPages,
     isSearching,
     error,
+    errorCode,
     fetchSpaces,
     setActiveSpaceKey,
     togglePageSelection,
@@ -45,15 +49,6 @@ function SpaceBrowser() {
   const activePages = activeSpaceKey ? pageTrees[activeSpaceKey] ?? [] : []
   const showSearchResults = searchResults.length > 0 || isSearching
 
-  const handleSearch = () => {
-    void searchPages(localSearch)
-  }
-
-  const handleNavigate = () => {
-    setUrlInput(localUrl)
-    void navigateFromUrl(localUrl)
-  }
-
   return (
     <div className="space-y-6 animate-fade-in stagger-3">
       <div className="card-app p-6 space-y-4">
@@ -61,8 +56,8 @@ function SpaceBrowser() {
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <Input
-                label="Search pages"
-                placeholder="Search by page title"
+                label={t('spaces:search.label')}
+                placeholder={t('spaces:search.placeholder')}
                 value={localSearch}
                 onChange={setLocalSearch}
                 disabled={isSearching}
@@ -70,10 +65,10 @@ function SpaceBrowser() {
             </div>
             <Button
               variant="primary"
-              onClick={handleSearch}
+              onClick={() => void searchPages(localSearch)}
               disabled={isSearching || !localSearch.trim()}
             >
-              {isSearching ? 'Searching…' : 'Search'}
+              {isSearching ? t('common:buttons.searching') : t('common:buttons.search')}
             </Button>
             {searchResults.length > 0 && (
               <button
@@ -81,7 +76,7 @@ function SpaceBrowser() {
                 onClick={clearSearchResults}
                 className="text-sm text-text-secondary hover:text-text-primary transition-colors pb-3"
               >
-                Clear
+                {t('common:buttons.clear')}
               </button>
             )}
           </div>
@@ -89,21 +84,28 @@ function SpaceBrowser() {
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <Input
-                label="Open from URL"
+                label={t('spaces:url.label')}
                 type="url"
-                placeholder="https://example.atlassian.net/wiki/spaces/ENG/pages/123456"
+                placeholder={t('spaces:url.placeholder')}
                 value={localUrl}
                 onChange={setLocalUrl}
-                error={error?.includes('Confluence page or space URL') ? error : undefined}
+                error={isInvalidConfluenceUrlError(errorCode) ? error ?? undefined : undefined}
               />
             </div>
-            <Button variant="secondary" onClick={handleNavigate} disabled={!localUrl.trim()}>
-              Go
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setUrlInput(localUrl)
+                void navigateFromUrl(localUrl)
+              }}
+              disabled={!localUrl.trim()}
+            >
+              {t('common:buttons.go')}
             </Button>
           </div>
         </div>
 
-        {error && !error.includes('Confluence page or space URL') && (
+        {error && !isInvalidConfluenceUrlError(errorCode) && (
           <p className="text-sm text-red-500">{error}</p>
         )}
       </div>
@@ -111,9 +113,11 @@ function SpaceBrowser() {
       {showSearchResults && (
         <div className="card-app">
           <div className="px-6 py-5 border-b border-border">
-            <h3 className="font-display text-lg font-semibold text-text-primary">Search Results</h3>
+            <h3 className="font-display text-lg font-semibold text-text-primary">{t('spaces:results.title')}</h3>
             <p className="text-sm text-text-secondary mt-1">
-              {isSearching ? 'Searching…' : `${searchResults.length} result${searchResults.length === 1 ? '' : 's'}`}
+              {isSearching
+                ? t('common:buttons.searching')
+                : t('spaces:results.count', { count: searchResults.length })}
             </p>
           </div>
 
@@ -123,7 +127,7 @@ function SpaceBrowser() {
                 <span className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="text-center py-12 text-text-muted text-sm">No pages found</div>
+              <div className="text-center py-12 text-text-muted text-sm">{t('spaces:results.none')}</div>
             ) : (
               <div className="space-y-1 px-3">
                 {searchResults.map((result) => {
@@ -155,10 +159,15 @@ function SpaceBrowser() {
 
       <div className="grid grid-cols-2 gap-6">
         <Panel
-          title="Spaces"
-          subtitle={activeSpaceKey ? `Viewing ${activeSpaceKey}` : 'Select a space'}
+          title={t('spaces:spaces.title')}
+          subtitle={
+            activeSpaceKey
+              ? t('spaces:spaces.viewing', { spaceKey: activeSpaceKey })
+              : t('spaces:spaces.select')
+          }
           isLoading={isLoadingSpaces}
           isEmpty={spaces.length === 0}
+          emptyLabel={t('common:empty.noContent')}
           error={showSearchResults ? null : error}
         >
           {spaces.map((space) => (
@@ -184,15 +193,19 @@ function SpaceBrowser() {
         </Panel>
 
         <Panel
-          title="Pages"
+          title={t('spaces:pages.title')}
           subtitle={
             activeSpaceKey
-              ? `${selectedPageIds.length} selected in ${activeSpaceKey}`
-              : 'Select a space to browse pages'
+              ? t('spaces:pages.selectedInSpace', {
+                  count: selectedPageIds.length,
+                  spaceKey: activeSpaceKey,
+                })
+              : t('spaces:pages.selectSpace')
           }
           isLoading={isLoadingPages}
           isEmpty={activeSpaceKey !== null && activePages.length === 0}
           inactive={!activeSpaceKey}
+          emptyLabel={t('common:empty.noContent')}
           error={activeSpaceKey && !showSearchResults ? error : null}
         >
           {activePages.map((page) => (
@@ -221,6 +234,7 @@ function PageTreeNode({
   selectedPageIds: string[]
   onToggle: (pageId: string, title: string) => void
 }) {
+  const { t } = useTranslation('spaces')
   const selected = selectedPageIds.includes(node.id)
 
   return (
@@ -237,7 +251,7 @@ function PageTreeNode({
           className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
             selected ? 'bg-accent border-accent' : 'border-border hover:border-text-muted'
           }`}
-          aria-label={`Select ${node.title}`}
+          aria-label={t('pages.selectAria', { title: node.title })}
         >
           {selected && (
             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -272,6 +286,7 @@ function Panel({
   isEmpty,
   inactive = false,
   error,
+  emptyLabel,
   children,
 }: {
   title: string
@@ -280,6 +295,7 @@ function Panel({
   isEmpty: boolean
   inactive?: boolean
   error?: string | null
+  emptyLabel: string
   children: React.ReactNode
 }) {
   return (
@@ -296,7 +312,7 @@ function Panel({
             <span className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           </div>
         ) : isEmpty ? (
-          <div className="text-center py-12 text-text-muted text-sm">No content</div>
+          <div className="text-center py-12 text-text-muted text-sm">{emptyLabel}</div>
         ) : (
           <div className="space-y-1 px-3">{children}</div>
         )}

@@ -101,7 +101,12 @@ pub struct ExportProgressEvent {
     pub status: String,
     pub progress: u32,
     pub stats: ExportStats,
-    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_params: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

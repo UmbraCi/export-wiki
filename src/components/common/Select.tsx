@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 interface SelectOption {
   value: string
   label: string
@@ -17,9 +19,12 @@ function Select({
   options,
   value,
   onChange,
-  placeholder = 'Select...',
+  placeholder,
   disabled = false,
 }: SelectProps) {
+  const { t } = useTranslation('common')
+  const resolvedPlaceholder = placeholder ?? t('select.placeholder')
+
   return (
     <div className="space-y-2">
       {label && (
@@ -45,7 +50,7 @@ function Select({
           }}
         >
           <option value="" disabled>
-            {placeholder}
+            {resolvedPlaceholder}
           </option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>

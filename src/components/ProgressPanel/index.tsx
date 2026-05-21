@@ -1,21 +1,23 @@
+import { useTranslation } from 'react-i18next'
 import { useExportStore, ExportLogEntry } from '../../stores/exportStore'
 import Button from '../common/Button'
 
 function ProgressPanel() {
+  const { t } = useTranslation(['export', 'common'])
   const { isExporting, progress, stats, logs, error, reset } = useExportStore()
 
   return (
     <div className="max-w-xl mx-auto mt-6 animate-fade-in stagger-6">
       <div className="card-app">
         <div className="px-8 py-6 border-b border-border">
-          <h2 className="font-display text-xl font-semibold text-text-primary">Export Progress</h2>
-          <p className="text-sm text-text-secondary mt-2">Track export status, stats, and logs</p>
+          <h2 className="font-display text-xl font-semibold text-text-primary">{t('export:progress.title')}</h2>
+          <p className="text-sm text-text-secondary mt-2">{t('export:progress.subtitle')}</p>
         </div>
 
         <div className="p-8 space-y-6">
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-text-secondary">Progress</span>
+              <span className="text-text-secondary">{t('export:progress.progressLabel')}</span>
               <span className="font-medium text-text-primary">{progress}%</span>
             </div>
             <div className="progress-app">
@@ -27,11 +29,11 @@ function ProgressPanel() {
           </div>
 
           <div className="grid grid-cols-5 gap-3">
-            <Stat label="Total" value={stats.total} />
-            <Stat label="Exported" value={stats.exported} color="blue" />
-            <Stat label="Skipped" value={stats.skipped} color="orange" />
-            <Stat label="Failed" value={stats.failed} color="red" />
-            <Stat label="Files" value={stats.attachments} />
+            <Stat label={t('export:progress.stats.total')} value={stats.total} />
+            <Stat label={t('export:progress.stats.exported')} value={stats.exported} color="blue" />
+            <Stat label={t('export:progress.stats.skipped')} value={stats.skipped} color="orange" />
+            <Stat label={t('export:progress.stats.failed')} value={stats.failed} color="red" />
+            <Stat label={t('export:progress.stats.files')} value={stats.attachments} />
           </div>
 
           {error && (
@@ -42,12 +44,12 @@ function ProgressPanel() {
 
           <div className="rounded-xl bg-bg-secondary overflow-hidden">
             <div className="px-4 py-3 border-b border-border text-xs font-medium text-text-muted uppercase">
-              Export Log
+              {t('export:progress.logTitle')}
             </div>
             <div className="h-48 overflow-y-auto p-4 bg-bg-card">
               {logs.length === 0 ? (
                 <div className="text-center py-8 text-text-muted text-sm">
-                  Start an export to see progress logs
+                  {t('export:progress.emptyLog')}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -62,7 +64,7 @@ function ProgressPanel() {
 
         <div className="px-8 py-6 bg-bg-secondary border-t border-border flex justify-end">
           <Button variant="secondary" onClick={reset} disabled={isExporting}>
-            Reset
+            {t('common:buttons.reset')}
           </Button>
         </div>
       </div>

@@ -1,0 +1,34 @@
+{
+  "title": "Settings",
+  "subtitle": "Configure export options",
+  "account": {
+    "title": "Account",
+    "subtitle": "Manage Confluence sign-in, session cookies, and SSO.",
+    "openAuth": "Open authentication"
+  },
+  "toggles": {
+    "includeAttachments": {
+      "label": "Include Attachments",
+      "description": "Download and include page attachments"
+    },
+    "skipUnchanged": {
+      "label": "Skip Unchanged",
+      "description": "Only export pages modified since last run"
+    }
+  },
+  "sync": {
+    "title": "Background Sync",
+    "subtitle": "Periodically re-export selected pages while the app is open.",
+    "enable": {
+      "label": "Enable Background Sync",
+      "description": "Off by default — turn on to schedule automatic exports"
+    },
+    "intervalLabel": "Sync Interval (minutes)",
+    "selectedPages": "Selected pages:",
+    "selectedNone": "None — select pages in the browser before enabling sync",
+    "selectedCount_one": "{{count}} page",
+    "selectedCount_other": "{{count}} pages",
+    "outputDir": "Sync Output Directory",
+    "warning": "Background sync uses the saved credential and runs only while the desktop app is open."
+  }
+}

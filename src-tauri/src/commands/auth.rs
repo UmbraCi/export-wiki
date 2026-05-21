@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::app_error::{self, codes, AppError};
 use crate::auth::SecretStore;
 use crate::contracts::{AuthStatus, SsoSessionInfo, SsoSessionStatus};
 use crate::sidecar::client::SidecarClient;
@@ -51,7 +52,7 @@ pub(crate) fn unauthenticated_status() -> AuthStatus {
 
 fn validate_manual_auth(config: &ManualAuthConfig) -> Result<(), String> {
     if !config.base_url.starts_with("https://") {
-        return Err("Confluence URL must start with https://".to_string());
+        return Err(app_error::invalid_https_url());
     }
 
     match config.method {
@@ -66,9 +67,7 @@ fn validate_manual_auth(config: &ManualAuthConfig) -> Result<(), String> {
                 .is_some_and(|value| !value.is_empty());
 
             if !has_username || !has_token {
-                return Err(
-                    "API token authentication requires username and API token".to_string(),
-                );
+                return Err(AppError::new(codes::API_TOKEN_REQUIRED).into_invoke_error());
             }
         }
         ManualAuthMethod::Cookie => {
@@ -78,7 +77,7 @@ fn validate_manual_auth(config: &ManualAuthConfig) -> Result<(), String> {
                 .is_some_and(|value| !value.is_empty());
 
             if !has_cookie {
-                return Err("Cookie authentication requires a cookie value".to_string());
+                return Err(AppError::new(codes::COOKIE_REQUIRED).into_invoke_error());
             }
         }
     }
@@ -163,7 +162,7 @@ pub async fn save_manual_auth(
         let sidecar_auth = state
             .secret_store
             .load_sidecar_auth()?
-            .ok_or_else(|| "Authentication required".to_string())?;
+            .ok_or_else(|| app_error::auth_required())?;
         auth_diag!(
             "validating cookie via sidecar base_url={} method={:?}",
             sidecar_auth.base_url,
@@ -178,9 +177,7 @@ pub async fn save_manual_auth(
         if let Err(error) = client.get_current_user(&sidecar_auth).await {
             auth_diag!("cookie validation failed: {error}");
             let _ = state.secret_store.clear();
-            return Err(format!(
-                "Cookie validation failed: {error}. Copy all wiki cookies (include seraph.confluence), not only JSESSIONID."
-            ));
+            return Err(app_error::cookie_validation_failed(&error));
         }
 
         auth_diag!("cookie validation succeeded");
@@ -230,7 +227,7 @@ mod tests {
         })
         .expect_err("http url should fail");
 
-        assert_eq!(error, "Confluence URL must start with https://");
+        assert_eq!(error, app_error::invalid_https_url());
     }
 
     #[test]
@@ -244,10 +241,7 @@ mod tests {
         })
         .expect_err("missing username should fail");
 
-        assert_eq!(
-            error,
-            "API token authentication requires username and API token"
-        );
+        assert_eq!(error, AppError::new(codes::API_TOKEN_REQUIRED).into_invoke_error());
     }
 
     #[test]
@@ -261,6 +255,6 @@ mod tests {
         })
         .expect_err("missing cookie should fail");
 
-        assert_eq!(error, "Cookie authentication requires a cookie value");
+        assert_eq!(error, AppError::new(codes::COOKIE_REQUIRED).into_invoke_error());
     }
 }

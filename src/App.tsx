@@ -7,11 +7,17 @@ import ExportPanel from './components/ExportPanel'
 import ProgressPanel from './components/ProgressPanel'
 import SettingsPanel from './components/SettingsPanel'
 import { useAuthStore } from './stores/authStore'
+import { useConfigStore } from './stores/configStore'
 import { authRequiredViews, useNavStore } from './stores/navStore'
 
 function App() {
   const { status } = useAuthStore()
+  const loadConfig = useConfigStore((state) => state.loadConfig)
   const { activeView, setActiveView } = useNavStore()
+
+  useEffect(() => {
+    void loadConfig()
+  }, [loadConfig])
 
   useEffect(() => {
     if (!status.authenticated && authRequiredViews.includes(activeView)) {
@@ -20,6 +26,10 @@ function App() {
   }, [status.authenticated, activeView, setActiveView])
 
   const renderView = () => {
+    if (activeView === 'settings') {
+      return <SettingsPanel />
+    }
+
     if (!status.authenticated) {
       return <AuthPanel />
     }
@@ -37,8 +47,6 @@ function App() {
             <ProgressPanel />
           </>
         )
-      case 'settings':
-        return <SettingsPanel />
       default:
         return <SpaceBrowser />
     }

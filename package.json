@@ -16,14 +16,17 @@
     "test:sidecar": "cd sidecar && uv run pytest",
     "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar --distpath ../.build/sidecar/dist --workpath ../.build/sidecar/work confluence_export_sidecar/__main__.py",
     "prepare:sidecar": "npm run build:sidecar && node scripts/prepare-sidecar.mjs",
-    "build:mvp": "npm run prepare:sidecar && npm run build"
+    "build:mvp": "npm run prepare:sidecar && npm run build",
+    "icon": "python3 scripts/fix-macos-icon-source.py && tauri icon src-tauri/icons/icon-source.png && node scripts/prune-tauri-icons.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@zumer/snapdom": "^1.9.14",
+    "i18next": "^26.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.8",
     "zustand": "^4.5.2"
   },
   "devDependencies": {

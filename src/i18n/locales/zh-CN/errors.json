@@ -1,0 +1,19 @@
+{
+  "AUTH_REQUIRED": "需要认证",
+  "INVALID_CONFLUENCE_URL": "请输入 Confluence 页面或空间 URL",
+  "INVALID_HTTPS_URL": "Confluence URL 必须以 https:// 开头",
+  "EMPTY_SELECTION": "请至少选择一个页面进行导出",
+  "OUTPUT_DIR_REQUIRED": "请选择输出目录",
+  "API_TOKEN_REQUIRED": "API 令牌认证需要用户名和 API 令牌",
+  "COOKIE_REQUIRED": "Cookie 认证需要提供 Cookie 值",
+  "COOKIE_VALIDATION_FAILED": "Cookie 验证失败：{{detail}}。请复制所有 Wiki Cookie（需包含 seraph.confluence），不能只有 JSESSIONID。",
+  "SSO_COOKIE_FALLBACK": "SSO 已完成，但此平台未提供可复用的会话凭证。请使用手动 API 令牌或会话 Cookie 备用方式。",
+  "WIKI_SESSION_REQUIRED": "请先在登录窗口中打开 Confluence 页面（点击「打开目标页面」）。",
+  "SSO_REQUIRES_SESSION_COOKIES": "SSO 认证需要会话 Cookie",
+  "NAVIGATION_HTTPS_REQUIRED": "导航 URL 必须以 https:// 开头",
+  "CLIENT_INVALID_HTTPS_URL": "Confluence URL 必须以 https:// 开头",
+  "CLIENT_BASE_URL_REQUIRED_COOKIE": "保存会话 Cookie 前需要填写 Confluence URL",
+  "CLIENT_SESSION_COOKIE_REQUIRED": "会话 Cookie 值不能为空",
+  "CLIENT_NO_SAVED_BASE_URL": "没有已保存的 Confluence URL 可更新",
+  "CLIENT_BASE_URL_REQUIRED_SSO": "重新登录前需要填写 Confluence URL"
+}

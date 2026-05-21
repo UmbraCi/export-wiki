@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "Confluence Wiki 导出工具",
+    "subtitle": "轻松导出 Wiki 内容",
+    "name": "导出 Wiki",
+    "tagline": "Confluence 发布工具"
+  },
+  "nav": {
+    "authentication": "认证",
+    "spaces": "空间",
+    "pages": "页面",
+    "settings": "设置",
+    "signInFirst": "请先登录后再访问此部分"
+  },
+  "status": {
+    "ready": "就绪",
+    "authenticated": "已认证",
+    "notConnected": "未连接",
+    "ssoInProgress": "SSO 登录进行中"
+  },
+  "theme": {
+    "light": "浅色模式",
+    "dark": "深色模式",
+    "system": "跟随系统"
+  },
+  "buttons": {
+    "cancel": "取消",
+    "clear": "清除",
+    "go": "前往",
+    "reset": "重置",
+    "saveSettings": "保存设置",
+    "logout": "退出登录",
+    "search": "搜索",
+    "searching": "搜索中…",
+    "choose": "选择",
+    "selected": "已选"
+  },
+  "select": {
+    "placeholder": "请选择…"
+  },
+  "empty": {
+    "noContent": "暂无内容"
+  },
+  "version": "版本 {{version}}",
+  "authMethod": {
+    "sso": "SSO",
+    "apiToken": "API 令牌",
+    "cookie": "会话 Cookie",
+    "unknown": "未知"
+  },
+  "language": {
+    "label": "语言",
+    "description": "选择应用界面显示语言",
+    "en": "English",
+    "zhCN": "简体中文"
+  }
+}

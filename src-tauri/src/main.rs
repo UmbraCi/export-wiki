@@ -1,16 +1,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_error;
 mod auth;
 mod contracts;
 mod commands;
+mod dev_icon;
 mod export;
 mod sidecar;
 mod state;
 mod sync;
 
 use state::AppState;
+#[cfg(feature = "dev-connector")]
 use tauri::Manager;
-
 #[cfg(feature = "dev-connector")]
 const DEV_CONNECTOR_CAPABILITY: &str =
     include_str!("../capabilities-dev/dev-connector.json");
@@ -48,6 +50,11 @@ fn main() {
             commands::config::load_config,
             commands::config::save_config,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Ready = event {
+                dev_icon::set_dev_dock_icon();
+            }
+        });
 }

@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-ico", "image-png"] }
 tauri-plugin-shell = "2"
 tauri-plugin-connector = { version = "0.12", optional = true }
 serde = { version = "1", features = ["derive"] }
@@ -24,6 +24,11 @@ chrono = { version = "0.4.44", features = ["serde"] }
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 dev-connector = ["dep:tauri-plugin-connector"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSApplication", "NSImage"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSData"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

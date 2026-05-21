@@ -1,5 +1,6 @@
 use crate::auth::base_url::normalize_confluence_base_url;
 use crate::commands::auth::{ManualAuthConfig, ManualAuthMethod};
+use crate::app_error::{codes, AppError};
 use crate::contracts::{AuthMethod, AuthStatus};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -111,7 +112,7 @@ fn build_credential(config: &ManualAuthConfig) -> Result<InternalCredential, Str
 
 fn build_sso_credential(config: &SsoAuthConfig) -> Result<InternalCredential, String> {
     if config.cookie.trim().is_empty() {
-        return Err("SSO authentication requires session cookies".to_string());
+        return Err(AppError::new(codes::SSO_REQUIRES_SESSION_COOKIES).into_invoke_error());
     }
 
     let base_url = normalize_confluence_base_url(&config.base_url)?;

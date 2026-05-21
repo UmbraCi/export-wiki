@@ -1,20 +1,21 @@
+import { useTranslation } from 'react-i18next'
 import { authRequiredViews, useNavStore, type AppView } from '../../stores/navStore'
 import { useAuthStore } from '../../stores/authStore'
 
-const navItems: { view: AppView; label: string }[] = [
-  { view: 'authentication', label: 'Authentication' },
-  { view: 'spaces', label: 'Spaces' },
-  { view: 'pages', label: 'Pages' },
-  { view: 'settings', label: 'Settings' },
-]
-
 function Sidebar() {
+  const { t } = useTranslation('common')
   const { activeView, setActiveView } = useNavStore()
   const authenticated = useAuthStore((state) => state.status.authenticated)
 
+  const navItems: { view: AppView; label: string }[] = [
+    { view: 'authentication', label: t('nav.authentication') },
+    { view: 'spaces', label: t('nav.spaces') },
+    { view: 'pages', label: t('nav.pages') },
+    { view: 'settings', label: t('nav.settings') },
+  ]
+
   return (
     <aside className="w-64 bg-bg-card flex flex-col h-full border-r border-border">
-      {/* Logo */}
       <div className="px-6 pt-6 pb-4">
         <div className="flex items-center gap-3 animate-fade-in stagger-1">
           <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shadow-md">
@@ -24,16 +25,15 @@ function Sidebar() {
           </div>
           <div>
             <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">
-              Export Wiki
+              {t('app.name')}
             </h1>
             <p className="text-xs text-text-muted">
-              Confluence Publisher
+              {t('app.tagline')}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-3 py-4">
         <div className="space-y-1">
           {navItems.map(({ view, label }) => (
@@ -42,16 +42,16 @@ function Sidebar() {
               label={label}
               active={activeView === view}
               disabled={!authenticated && authRequiredViews.includes(view)}
+              disabledTitle={t('nav.signInFirst')}
               onClick={() => setActiveView(view)}
             />
           ))}
         </div>
       </nav>
 
-      {/* Footer */}
       <div className="px-6 py-4 border-t border-border">
         <p className="text-xs text-text-muted text-center">
-          Version 1.0.0
+          {t('version', { version: '1.0.0' })}
         </p>
       </div>
     </aside>
@@ -62,11 +62,13 @@ function NavItem({
   label,
   active = false,
   disabled = false,
+  disabledTitle,
   onClick,
 }: {
   label: string
   active?: boolean
   disabled?: boolean
+  disabledTitle?: string
   onClick: () => void
 }) {
   return (
@@ -74,7 +76,7 @@ function NavItem({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={disabled ? 'Sign in first to access this section' : undefined}
+      title={disabled ? disabledTitle : undefined}
       className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
         disabled
           ? 'text-text-muted cursor-not-allowed opacity-50'
