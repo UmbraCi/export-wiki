@@ -1,74 +1,106 @@
 import { create } from 'zustand'
-import { invoke } from '@tauri-apps/api/core'
+import { api } from '../lib/api'
+import type { AuthStatus, ManualAuthConfig } from '../lib/contracts'
 
-export type AuthMethod = 'api_token' | 'cookie' | 'password'
+export type ManualAuthMode = ManualAuthConfig['method']
 
-export interface AuthConfig {
-  url: string
-  method: AuthMethod
-  username?: string
-  apiToken?: string
-  password?: string
-  cookies?: string
+const unauthenticatedStatus: AuthStatus = {
+  authenticated: false,
+  method: null,
+  baseUrl: null,
+  displayName: null,
+}
+
+function sanitizeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/token|cookie|password|secret/gi, '[redacted]')
 }
 
 interface AuthState {
-  credentials: AuthConfig | null
-  isAuthenticated: boolean
-  authMethod: AuthMethod
-  isTesting: boolean
+  status: AuthStatus
+  baseUrl: string
+  manualMode: ManualAuthMode | null
+  isLoading: boolean
   error: string | null
 
-  setAuthMethod: (method: AuthMethod) => void
-  setCredentials: (config: AuthConfig) => void
-  testConnection: () => Promise<boolean>
-  logout: () => void
+  setBaseUrl: (baseUrl: string) => void
+  setManualMode: (mode: ManualAuthMode | null) => void
+  loadStatus: () => Promise<void>
+  startSsoLogin: () => Promise<void>
+  saveManualAuth: (config: ManualAuthConfig) => Promise<void>
+  logout: () => Promise<void>
   clearError: () => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  credentials: null,
-  isAuthenticated: false,
-  authMethod: 'api_token',
-  isTesting: false,
+  status: unauthenticatedStatus,
+  baseUrl: '',
+  manualMode: null,
+  isLoading: false,
   error: null,
 
-  setAuthMethod: (method) => set({ authMethod: method }),
+  setBaseUrl: (baseUrl) => set({ baseUrl }),
 
-  setCredentials: (config) => set({ credentials: config }),
+  setManualMode: (manualMode) => set({ manualMode, error: null }),
 
-  testConnection: async () => {
-    const { credentials } = get()
-    if (!credentials) {
-      set({ error: 'No credentials configured' })
-      return false
-    }
-
-    set({ isTesting: true, error: null })
+  loadStatus: async () => {
+    set({ isLoading: true, error: null })
 
     try {
-      await invoke('auth_configure', { config: credentials })
-      const result = await invoke<{ success: boolean; message: string }>('auth_test')
-
-      if (result.success) {
-        set({ isAuthenticated: true, isTesting: false })
-        return true
-      } else {
-        set({ error: result.message, isTesting: false })
-        return false
-      }
-    } catch (err) {
-      set({ error: String(err), isTesting: false })
-      return false
+      const status = await api.getAuthStatus()
+      set({
+        status,
+        baseUrl: status.baseUrl ?? get().baseUrl,
+        isLoading: false,
+      })
+    } catch (error) {
+      set({ error: sanitizeError(error), isLoading: false })
     }
   },
 
-  logout: () => set({
-    credentials: null,
-    isAuthenticated: false,
-    authMethod: 'api_token',
-    error: null,
-  }),
+  startSsoLogin: async () => {
+    const { baseUrl } = get()
+    set({ isLoading: true, error: null })
+
+    try {
+      const status = await api.startSsoLogin(baseUrl)
+      set({ status, isLoading: false })
+    } catch (error) {
+      set({ error: sanitizeError(error), isLoading: false })
+    }
+  },
+
+  saveManualAuth: async (config) => {
+    set({ isLoading: true, error: null })
+
+    try {
+      const status = await api.saveManualAuth(config)
+      set({
+        status,
+        baseUrl: config.baseUrl,
+        isLoading: false,
+        manualMode: null,
+      })
+    } catch (error) {
+      set({ error: sanitizeError(error), isLoading: false })
+    }
+  },
+
+  logout: async () => {
+    set({ isLoading: true, error: null })
+
+    try {
+      const status = await api.logout()
+      set({
+        status,
+        baseUrl: '',
+        manualMode: null,
+        isLoading: false,
+      })
+    } catch (error) {
+      set({ error: sanitizeError(error), isLoading: false })
+    }
+  },
 
   clearError: () => set({ error: null }),
 }))
