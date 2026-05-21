@@ -28,6 +28,18 @@ export interface PageNode {
   children: PageNode[]
 }
 
+export interface SearchResult {
+  pageId: string
+  title: string
+  spaceKey: string
+  excerpt: string
+}
+
+export interface ConfluenceUrlTarget {
+  pageId: string | null
+  spaceKey: string | null
+}
+
 export type ExportFormat = 'markdown' | 'html'
 
 export interface ExportOptions {

@@ -35,6 +35,22 @@ pub struct PageNode {
     pub children: Vec<PageNode>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub page_id: String,
+    pub title: String,
+    pub space_key: String,
+    pub excerpt: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfluenceUrlTarget {
+    pub page_id: Option<String>,
+    pub space_key: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ExportFormat {

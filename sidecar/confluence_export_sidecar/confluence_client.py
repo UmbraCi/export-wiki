@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import html
+import re
 from typing import Any
 
 from atlassian import Confluence
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def normalize_spaces(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -32,6 +36,27 @@ def normalize_page_node(raw: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_page_tree(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [normalize_page_node(page) for page in raw]
+
+
+def _strip_html_excerpt(value: str) -> str:
+    without_tags = _HTML_TAG_RE.sub("", value)
+    return html.unescape(without_tags).strip()
+
+
+def normalize_search_results(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map sidecar search hits to the Tauri SearchResult contract."""
+    normalized: list[dict[str, Any]] = []
+    for item in raw:
+        page_id = str(item.get("pageId") or item.get("id") or "")
+        normalized.append(
+            {
+                "pageId": page_id,
+                "title": item.get("title", ""),
+                "spaceKey": item.get("spaceKey", ""),
+                "excerpt": _strip_html_excerpt(str(item.get("excerpt", ""))),
+            }
+        )
+    return normalized
 
 
 class ConfluenceClient:
@@ -107,6 +132,38 @@ class ConfluenceClient:
 
         root = self._build_page_node(str(homepage_id), None)
         return normalize_page_tree([root])
+
+    def search_pages(self, query: str, limit: int = 25) -> list[dict[str, Any]]:
+        trimmed = query.strip()
+        if not trimmed:
+            return []
+
+        escaped = trimmed.replace('"', '\\"')
+        cql = f'type=page AND title ~ "{escaped}*"'
+        response = self._client.cql(cql, limit=limit)
+        raw_results: list[dict[str, Any]] = []
+
+        for item in response.get("results", []):
+            content = item.get("content") or {}
+            page_id = content.get("id") or item.get("id")
+            if page_id is None:
+                continue
+
+            space = item.get("space") or content.get("space") or {}
+            space_key = ""
+            if isinstance(space, dict):
+                space_key = space.get("key", "")
+
+            raw_results.append(
+                {
+                    "id": str(page_id),
+                    "title": item.get("title") or content.get("title", ""),
+                    "spaceKey": space_key,
+                    "excerpt": item.get("excerpt", ""),
+                }
+            )
+
+        return normalize_search_results(raw_results)
 
     def fetch_current_user(self) -> dict[str, Any]:
         user = self._client.get("rest/api/user/current")

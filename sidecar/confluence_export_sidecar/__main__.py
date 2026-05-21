@@ -28,7 +28,7 @@ def _dispatch(req: dict) -> dict:
     if req_type == "ping":
         return success_response(request_id, {"status": "ok"})
 
-    if req_type in {"get_spaces", "get_page_tree", "get_current_user"}:
+    if req_type in {"get_spaces", "get_page_tree", "get_current_user", "search_pages"}:
         auth = payload.get("auth")
         if not auth:
             return _error_response(request_id, "auth payload is required")
@@ -44,6 +44,14 @@ def _dispatch(req: dict) -> dict:
                 return success_response(
                     request_id,
                     {"pages": client.fetch_page_tree(str(space_key))},
+                )
+            if req_type == "search_pages":
+                query = payload.get("query")
+                if not query:
+                    return _error_response(request_id, "query is required")
+                return success_response(
+                    request_id,
+                    {"results": client.search_pages(str(query))},
                 )
             return success_response(request_id, {"user": client.fetch_current_user()})
         except Exception as exc:  # noqa: BLE001

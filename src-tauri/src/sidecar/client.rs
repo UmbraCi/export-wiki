@@ -124,6 +124,21 @@ impl SidecarClient {
         .await
     }
 
+    pub async fn search_pages(
+        &self,
+        auth: &SidecarAuthConfig,
+        query: &str,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "search_pages",
+            json!({
+                "auth": auth_payload(auth),
+                "query": query,
+            }),
+        )
+        .await
+    }
+
     pub async fn get_current_user(
         &self,
         auth: &SidecarAuthConfig,
