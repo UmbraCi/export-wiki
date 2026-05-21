@@ -1,12 +1,8 @@
+use crate::auth::base_url::normalize_confluence_base_url;
 use crate::commands::auth::{ManualAuthConfig, ManualAuthMethod};
 use crate::contracts::{AuthMethod, AuthStatus};
-use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-
-const SERVICE_NAME: &str = "export-wiki";
-const METADATA_ACCOUNT: &str = "auth-metadata";
-const SECRET_ACCOUNT: &str = "auth-secret";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct StoredMetadata {
@@ -19,12 +15,6 @@ struct StoredMetadata {
 struct InternalCredential {
     metadata: StoredMetadata,
     secret: String,
-}
-
-pub struct StoredCredential {
-    pub base_url: String,
-    pub method: AuthMethod,
-    pub username: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,8 +34,8 @@ pub struct SsoAuthConfig {
 }
 
 pub trait SecretStore {
-    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String>;
-    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String>;
+    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<(), String>;
+    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<(), String>;
     fn load_status(&self) -> Result<AuthStatus, String>;
     fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String>;
     fn clear(&self) -> Result<(), String>;
@@ -71,22 +61,17 @@ fn extract_secret(config: &ManualAuthConfig) -> Result<String, String> {
     }
 }
 
-fn credential_to_stored(credential: &InternalCredential) -> StoredCredential {
-    StoredCredential {
-        base_url: credential.metadata.base_url.clone(),
-        method: credential.metadata.method.clone(),
-        username: credential.metadata.username.clone(),
-    }
-}
-
 fn credential_to_sidecar_auth(credential: &InternalCredential) -> SidecarAuthConfig {
     let (api_token, cookie) = match credential.metadata.method {
         AuthMethod::ApiToken => (Some(credential.secret.clone()), None),
         AuthMethod::Cookie | AuthMethod::Sso => (None, Some(credential.secret.clone())),
     };
 
+    let base_url = normalize_confluence_base_url(&credential.metadata.base_url)
+        .unwrap_or_else(|_| credential.metadata.base_url.clone());
+
     SidecarAuthConfig {
-        base_url: credential.metadata.base_url.clone(),
+        base_url,
         method: credential.metadata.method.clone(),
         username: credential.metadata.username.clone(),
         api_token,
@@ -113,9 +98,10 @@ fn unauthenticated_status() -> AuthStatus {
 }
 
 fn build_credential(config: &ManualAuthConfig) -> Result<InternalCredential, String> {
+    let base_url = normalize_confluence_base_url(&config.base_url)?;
     Ok(InternalCredential {
         metadata: StoredMetadata {
-            base_url: config.base_url.clone(),
+            base_url,
             method: manual_method_to_auth_method(&config.method),
             username: config.username.clone(),
         },
@@ -128,9 +114,10 @@ fn build_sso_credential(config: &SsoAuthConfig) -> Result<InternalCredential, St
         return Err("SSO authentication requires session cookies".to_string());
     }
 
+    let base_url = normalize_confluence_base_url(&config.base_url)?;
     Ok(InternalCredential {
         metadata: StoredMetadata {
-            base_url: config.base_url.clone(),
+            base_url,
             method: AuthMethod::Sso,
             username: config.display_name.clone(),
         },
@@ -138,24 +125,23 @@ fn build_sso_credential(config: &SsoAuthConfig) -> Result<InternalCredential, St
     })
 }
 
+/// In-process credential store. Secrets are cleared when the app exits.
 #[derive(Default)]
-pub struct InMemorySecretStore {
+pub struct MemorySecretStore {
     credential: Mutex<Option<InternalCredential>>,
 }
 
-impl SecretStore for InMemorySecretStore {
-    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String> {
+impl SecretStore for MemorySecretStore {
+    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<(), String> {
         let credential = build_credential(config)?;
-        let stored = credential_to_stored(&credential);
         *self.credential.lock().map_err(|e| e.to_string())? = Some(credential);
-        Ok(stored)
+        Ok(())
     }
 
-    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String> {
+    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<(), String> {
         let credential = build_sso_credential(config)?;
-        let stored = credential_to_stored(&credential);
         *self.credential.lock().map_err(|e| e.to_string())? = Some(credential);
-        Ok(stored)
+        Ok(())
     }
 
     fn load_status(&self) -> Result<AuthStatus, String> {
@@ -168,98 +154,11 @@ impl SecretStore for InMemorySecretStore {
 
     fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String> {
         let guard = self.credential.lock().map_err(|e| e.to_string())?;
-        Ok(guard
-            .as_ref()
-            .map(credential_to_sidecar_auth))
+        Ok(guard.as_ref().map(credential_to_sidecar_auth))
     }
 
     fn clear(&self) -> Result<(), String> {
         *self.credential.lock().map_err(|e| e.to_string())? = None;
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-pub struct KeyringSecretStore;
-
-impl KeyringSecretStore {
-    fn metadata_entry() -> Result<Entry, String> {
-        Entry::new(SERVICE_NAME, METADATA_ACCOUNT).map_err(|e| e.to_string())
-    }
-
-    fn secret_entry() -> Result<Entry, String> {
-        Entry::new(SERVICE_NAME, SECRET_ACCOUNT).map_err(|e| e.to_string())
-    }
-
-    fn load_credential(&self) -> Result<Option<InternalCredential>, String> {
-        let metadata_entry = Self::metadata_entry()?;
-        let secret_entry = Self::secret_entry()?;
-
-        let metadata_json = match metadata_entry.get_password() {
-            Ok(value) => value,
-            Err(keyring::Error::NoEntry) => return Ok(None),
-            Err(error) => return Err(error.to_string()),
-        };
-
-        let secret = match secret_entry.get_password() {
-            Ok(value) => value,
-            Err(keyring::Error::NoEntry) => return Ok(None),
-            Err(error) => return Err(error.to_string()),
-        };
-
-        let metadata: StoredMetadata =
-            serde_json::from_str(&metadata_json).map_err(|e| e.to_string())?;
-
-        Ok(Some(InternalCredential { metadata, secret }))
-    }
-
-    fn persist_credential(&self, credential: InternalCredential) -> Result<StoredCredential, String> {
-        let stored = credential_to_stored(&credential);
-        let metadata_json =
-            serde_json::to_string(&credential.metadata).map_err(|e| e.to_string())?;
-
-        Self::metadata_entry()?
-            .set_password(&metadata_json)
-            .map_err(|e| e.to_string())?;
-        Self::secret_entry()?
-            .set_password(&credential.secret)
-            .map_err(|e| e.to_string())?;
-
-        Ok(stored)
-    }
-}
-
-impl SecretStore for KeyringSecretStore {
-    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String> {
-        self.persist_credential(build_credential(config)?)
-    }
-
-    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String> {
-        self.persist_credential(build_sso_credential(config)?)
-    }
-
-    fn load_status(&self) -> Result<AuthStatus, String> {
-        Ok(match self.load_credential()? {
-            Some(credential) => credential_to_status(&credential),
-            None => unauthenticated_status(),
-        })
-    }
-
-    fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String> {
-        Ok(self.load_credential()?.as_ref().map(credential_to_sidecar_auth))
-    }
-
-    fn clear(&self) -> Result<(), String> {
-        let metadata_result = Self::metadata_entry()?.delete_credential();
-        if !matches!(metadata_result, Ok(()) | Err(keyring::Error::NoEntry)) {
-            return Err(metadata_result.unwrap_err().to_string());
-        }
-
-        let secret_result = Self::secret_entry()?.delete_credential();
-        if !matches!(secret_result, Ok(()) | Err(keyring::Error::NoEntry)) {
-            return Err(secret_result.unwrap_err().to_string());
-        }
-
         Ok(())
     }
 }
@@ -270,8 +169,27 @@ mod tests {
     use crate::commands::auth::ManualAuthMethod;
 
     #[test]
+    fn memory_store_roundtrip() {
+        let store = MemorySecretStore::default();
+        store
+            .save_manual_auth(&ManualAuthConfig {
+                base_url: "https://wiki.example.com".into(),
+                method: ManualAuthMethod::Cookie,
+                username: None,
+                api_token: None,
+                cookie: Some("JSESSIONID=abc".into()),
+            })
+            .expect("save credentials");
+
+        let status = store.load_status().expect("load status");
+        assert!(status.authenticated);
+        store.clear().expect("clear credentials");
+        assert!(!store.load_status().expect("load status").authenticated);
+    }
+
+    #[test]
     fn status_does_not_include_secret_material() {
-        let store = InMemorySecretStore::default();
+        let store = MemorySecretStore::default();
         store
             .save_manual_auth(&ManualAuthConfig {
                 base_url: "https://example.atlassian.net".into(),

@@ -1,7 +1,7 @@
 //! Launch the packaged sidecar and exchange a single JSON-line request.
 
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -12,11 +12,6 @@ use crate::auth::SidecarAuthConfig;
 use crate::contracts::AuthMethod;
 
 use super::protocol::{SidecarRequest, SidecarResponse, PROTOCOL_VERSION};
-
-/// Serializes one JSON request line understood by [`run_one_request`].
-pub fn build_ping_line(request_id: &str) -> String {
-    build_request_line("ping", request_id, json!({}))
-}
 
 pub fn build_request_line(request_type: &str, request_id: &str, payload: Value) -> String {
     let req = SidecarRequest {
@@ -78,16 +73,6 @@ impl SidecarClient {
         Ok(Self {
             program: resolve_sidecar_program()?,
         })
-    }
-
-    pub fn with_program(program: impl Into<PathBuf>) -> Self {
-        Self {
-            program: program.into(),
-        }
-    }
-
-    pub fn program(&self) -> &Path {
-        &self.program
     }
 
     pub async fn request(&self, request_type: &str, payload: Value) -> Result<SidecarResponse, String> {
@@ -257,7 +242,7 @@ mod tests {
 
     #[test]
     fn build_ping_contains_required_keys() {
-        let raw = build_ping_line("probe");
+        let raw = build_request_line("ping", "probe", json!({}));
         assert!(raw.contains("\"type\":\"ping\""));
         assert!(raw.contains("\"request_id\":\"probe\""));
     }

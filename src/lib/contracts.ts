@@ -15,6 +15,19 @@ export interface AuthStatus {
   displayName: string | null
 }
 
+export interface SsoSessionInfo {
+  active: boolean
+  entryUrl: string
+  baseUrl: string
+}
+
+export interface SsoSessionStatus {
+  active: boolean
+  entryUrl: string | null
+  currentUrl: string | null
+  wikiSessionDetected: boolean
+}
+
 export interface SpaceInfo {
   key: string
   name: string

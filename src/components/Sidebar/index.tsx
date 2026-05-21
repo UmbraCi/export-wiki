@@ -1,4 +1,17 @@
+import { authRequiredViews, useNavStore, type AppView } from '../../stores/navStore'
+import { useAuthStore } from '../../stores/authStore'
+
+const navItems: { view: AppView; label: string }[] = [
+  { view: 'authentication', label: 'Authentication' },
+  { view: 'spaces', label: 'Spaces' },
+  { view: 'pages', label: 'Pages' },
+  { view: 'settings', label: 'Settings' },
+]
+
 function Sidebar() {
+  const { activeView, setActiveView } = useNavStore()
+  const authenticated = useAuthStore((state) => state.status.authenticated)
+
   return (
     <aside className="w-64 bg-bg-card flex flex-col h-full border-r border-border">
       {/* Logo */}
@@ -23,10 +36,15 @@ function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4">
         <div className="space-y-1">
-          <NavItem label="Authentication" active />
-          <NavItem label="Spaces" />
-          <NavItem label="Pages" />
-          <NavItem label="Settings" />
+          {navItems.map(({ view, label }) => (
+            <NavItem
+              key={view}
+              label={label}
+              active={activeView === view}
+              disabled={!authenticated && authRequiredViews.includes(view)}
+              onClick={() => setActiveView(view)}
+            />
+          ))}
         </div>
       </nav>
 
@@ -40,13 +58,29 @@ function Sidebar() {
   )
 }
 
-function NavItem({ label, active = false }: { label: string; active?: boolean }) {
+function NavItem({
+  label,
+  active = false,
+  disabled = false,
+  onClick,
+}: {
+  label: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
   return (
     <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? 'Sign in first to access this section' : undefined}
       className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-        active
-          ? 'bg-bg-secondary text-text-primary'
-          : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
+        disabled
+          ? 'text-text-muted cursor-not-allowed opacity-50'
+          : active
+            ? 'bg-bg-secondary text-text-primary'
+            : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
       }`}
     >
       {label}

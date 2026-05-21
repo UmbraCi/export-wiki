@@ -5,23 +5,13 @@ use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use crate::auth::SecretStore;
-use crate::contracts::{ExportProgressEvent, ExportStats};
+use crate::contracts::{ExportFormat, ExportOptions, ExportProgressEvent, ExportStats};
 use crate::export::file_writer::{ExportedAttachment, ExportedPage, write_exported_page};
 use crate::sidecar::client::SidecarClient;
 use crate::state::AppState;
 
 const EMPTY_SELECTION: &str = "Select at least one page to export";
-const UNSUPPORTED_FORMAT: &str = "Unsupported export format";
 const AUTH_REQUIRED: &str = "Authentication required";
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportPagesOptions {
-    pub page_ids: Vec<String>,
-    pub output_dir: String,
-    pub format: String,
-    pub include_attachments: bool,
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,7 +102,7 @@ fn emit_progress(app: &AppHandle, event: ExportProgressEvent) -> Result<(), Stri
 
 #[tauri::command]
 pub async fn export_pages(
-    options: ExportPagesOptions,
+    options: ExportOptions,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ExportPagesAck, String> {
@@ -120,9 +110,10 @@ pub async fn export_pages(
         return Err(EMPTY_SELECTION.to_string());
     }
 
-    if options.format != "markdown" && options.format != "html" {
-        return Err(UNSUPPORTED_FORMAT.to_string());
-    }
+    let format = match options.format {
+        ExportFormat::Markdown => "markdown",
+        ExportFormat::Html => "html",
+    };
 
     if options.output_dir.trim().is_empty() {
         return Err("Select an output directory".to_string());
@@ -157,7 +148,7 @@ pub async fn export_pages(
         .export_pages(
             &auth,
             &options.page_ids,
-            &options.format,
+            format,
             options.include_attachments,
         )
         .await
@@ -229,11 +220,6 @@ mod tests {
     #[test]
     fn rejects_empty_page_selection_message_is_stable() {
         assert_eq!(EMPTY_SELECTION, "Select at least one page to export");
-    }
-
-    #[test]
-    fn unsupported_format_message_is_stable() {
-        assert_eq!(UNSUPPORTED_FORMAT, "Unsupported export format");
     }
 
     #[test]

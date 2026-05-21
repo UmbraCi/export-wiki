@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAuthStore, type ManualAuthMode } from '../../stores/authStore'
+import { useAuthStore, formatCurrentUrl, initSsoEventListeners, type ManualAuthMode } from '../../stores/authStore'
 import type { AuthStatus } from '../../lib/contracts'
 import Button from '../common/Button'
 import Input from '../common/Input'
@@ -12,20 +12,32 @@ function AuthPanel() {
     manualMode,
     isLoading,
     error,
+    ssoSession,
+    ssoStatus,
     setBaseUrl,
     setManualMode,
     loadStatus,
     startSsoLogin,
+    refreshSsoStatus,
+    navigateSsoWindow,
+    completeSsoLogin,
+    cancelSsoLogin,
     saveManualAuth,
     logout,
+    reconnectWithSso,
+    updateSessionCookie,
     clearError,
   } = useAuthStore()
+
+  const [showCookieUpdate, setShowCookieUpdate] = useState(false)
+  const [sessionCookie, setSessionCookie] = useState('')
 
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
 
   useEffect(() => {
+    initSsoEventListeners()
     void loadStatus()
   }, [loadStatus])
 
@@ -36,6 +48,17 @@ function AuthPanel() {
       setShowToast(true)
     }
   }, [error])
+
+  useEffect(() => {
+    if (!ssoSession?.active) return
+
+    void refreshSsoStatus()
+    const interval = window.setInterval(() => {
+      void refreshSsoStatus()
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [ssoSession?.active, refreshSsoStatus])
 
   if (status.authenticated) {
     return (
@@ -71,14 +94,53 @@ function AuthPanel() {
             )}
           </div>
 
-          <div className="px-8 py-6 bg-bg-secondary border-t border-border flex justify-between items-center">
+          <div className="px-8 py-6 bg-bg-secondary border-t border-border space-y-4">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-success" />
               <span className="text-sm text-success font-medium">Authenticated</span>
             </div>
-            <Button variant="secondary" onClick={() => void logout()} loading={isLoading}>
-              Logout
-            </Button>
+
+            <p className="text-xs text-text-muted">
+              Session expired or API errors? Sign in again with SSO, update your session cookie, or log out.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => void reconnectWithSso()} loading={isLoading}>
+                Sign in again (SSO)
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setShowCookieUpdate((open) => !open)}
+                disabled={isLoading}
+              >
+                {showCookieUpdate ? 'Hide cookie update' : 'Update session cookie'}
+              </Button>
+              <Button variant="secondary" onClick={() => void logout()} loading={isLoading}>
+                Logout
+              </Button>
+            </div>
+
+            {showCookieUpdate && (
+              <div className="rounded-xl border border-border bg-bg-primary p-4 space-y-3 animate-fade-in">
+                <Input
+                  label="Session Cookie"
+                  placeholder="cookie1=value1; cookie2=value2"
+                  value={sessionCookie}
+                  onChange={setSessionCookie}
+                />
+                <p className="text-xs text-text-muted">
+                  Copy cookies from browser DevTools after signing in to Confluence in your browser.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => void updateSessionCookie(sessionCookie)}
+                  loading={isLoading}
+                  disabled={!sessionCookie}
+                >
+                  Save cookie
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -109,58 +171,78 @@ function AuthPanel() {
         </div>
 
         <div className="p-8 space-y-6">
-          <Input
-            label="Confluence URL"
-            placeholder="https://your-company.atlassian.net"
-            type="url"
-            value={baseUrl}
-            onChange={setBaseUrl}
-          />
+          {ssoSession?.active ? (
+            <SsoInProgressPanel
+              entryUrl={ssoSession.entryUrl}
+              currentUrl={ssoStatus.currentUrl}
+              wikiSessionDetected={ssoStatus.wikiSessionDetected}
+              isLoading={isLoading}
+              onOpenTarget={() => void navigateSsoWindow()}
+              onComplete={() => void completeSsoLogin()}
+              onCancel={() => void cancelSsoLogin()}
+            />
+          ) : (
+            <>
+              <Input
+                label="Confluence URL"
+                placeholder="https://your-company.atlassian.net or full wiki page URL"
+                type="url"
+                value={baseUrl}
+                onChange={setBaseUrl}
+              />
 
-          <div className="space-y-3">
-            <Button
-              size="lg"
-              onClick={() => void startSsoLogin()}
-              loading={isLoading && manualMode === null}
-              disabled={!baseUrl}
-            >
-              Sign in with SSO
-            </Button>
-            <p className="text-xs text-text-muted">
-              Opens Confluence in a secure browser window for SSO sign-in.
-            </p>
-          </div>
+              <div className="space-y-3">
+                <Button
+                  size="lg"
+                  onClick={() => void startSsoLogin()}
+                  loading={isLoading && manualMode === null}
+                  disabled={!baseUrl || manualMode === 'cookie'}
+                >
+                  Sign in with SSO
+                </Button>
+                <p className="text-xs text-text-muted">
+                  {manualMode === 'cookie'
+                    ? 'Using session cookie below — SSO window will not open. Click Save Cookie after pasting cookies from DevTools.'
+                    : 'Opens Confluence in a secure browser window. Complete IdP login there, then use the main app to open your target page and confirm.'}
+                </p>
+              </div>
+            </>
+          )}
 
-          <div className="border-t border-border pt-6 space-y-4">
-            <div>
-              <h3 className="text-sm font-medium text-text-primary">Manual fallback</h3>
-              <p className="text-xs text-text-muted mt-1">
-                Use API token or session cookie when SSO is unavailable.
-              </p>
+          {!ssoSession?.active && (
+            <div className="border-t border-border pt-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-text-primary">Manual fallback</h3>
+                <p className="text-xs text-text-muted mt-1">
+                  Use API token or session cookie when SSO is unavailable.
+                </p>
+              </div>
+
+              <ManualModeTabs activeMode={manualMode} onChange={setManualMode} />
+
+              {manualMode === 'api_token' && (
+                <ApiTokenForm
+                  baseUrl={baseUrl}
+                  isLoading={isLoading}
+                  onSubmit={saveManualAuth}
+                />
+              )}
+
+              {manualMode === 'cookie' && (
+                <CookieForm
+                  baseUrl={baseUrl}
+                  isLoading={isLoading}
+                  onSubmit={saveManualAuth}
+                />
+              )}
             </div>
-
-            <ManualModeTabs activeMode={manualMode} onChange={setManualMode} />
-
-            {manualMode === 'api_token' && (
-              <ApiTokenForm
-                baseUrl={baseUrl}
-                isLoading={isLoading}
-                onSubmit={saveManualAuth}
-              />
-            )}
-
-            {manualMode === 'cookie' && (
-              <CookieForm
-                baseUrl={baseUrl}
-                isLoading={isLoading}
-                onSubmit={saveManualAuth}
-              />
-            )}
-          </div>
+          )}
         </div>
 
         <div className="px-8 py-6 bg-bg-secondary border-t border-border">
-          <span className="text-sm text-text-muted">Not connected</span>
+          <span className="text-sm text-text-muted">
+            {ssoSession?.active ? 'SSO login in progress' : 'Not connected'}
+          </span>
         </div>
       </div>
 
@@ -173,6 +255,82 @@ function AuthPanel() {
             clearError()
           }}
         />
+      )}
+    </div>
+  )
+}
+
+function SsoInProgressPanel({
+  entryUrl,
+  currentUrl,
+  wikiSessionDetected,
+  isLoading,
+  onOpenTarget,
+  onComplete,
+  onCancel,
+}: {
+  entryUrl: string
+  currentUrl: string | null
+  wikiSessionDetected: boolean
+  isLoading: boolean
+  onOpenTarget: () => void
+  onComplete: () => void
+  onCancel: () => void
+}) {
+  const statusMessage = wikiSessionDetected
+    ? 'Completing login automatically…'
+    : 'Detecting wiki session…'
+
+  return (
+    <div className="rounded-xl border border-border bg-bg-secondary p-5 space-y-4 animate-fade-in">
+      <div>
+        <h3 className="text-sm font-medium text-text-primary">SSO login in progress</h3>
+        <p className="text-xs text-text-muted mt-1">
+          Complete login in the SSO window. When the wiki page loads as signed in, this app will detect the session and connect automatically.
+        </p>
+      </div>
+
+      <div className="rounded-lg bg-bg-primary border border-border px-4 py-3 space-y-3">
+        <div>
+          <p className="text-xs text-text-muted">Login window current URL</p>
+          <p className="text-sm text-text-primary font-medium mt-1 break-all">
+            {formatCurrentUrl(currentUrl)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-text-muted">Target page</p>
+          <p className="text-sm text-text-primary font-medium mt-1 break-all">{entryUrl}</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${wikiSessionDetected ? 'bg-success' : 'bg-text-muted'}`}
+          />
+          <span className="text-sm text-text-secondary">
+            Wiki session: {wikiSessionDetected ? 'Detected' : 'Not detected'}
+          </span>
+        </div>
+
+        <p className="text-xs text-text-muted">{statusMessage}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Button variant="secondary" onClick={onOpenTarget} loading={isLoading}>
+          Open target page
+        </Button>
+        <Button onClick={onComplete} loading={isLoading} disabled={!wikiSessionDetected}>
+          Complete login
+        </Button>
+        <Button variant="secondary" onClick={onCancel} loading={isLoading}>
+          Cancel
+        </Button>
+      </div>
+
+      {!wikiSessionDetected && (
+        <p className="text-xs text-text-muted">
+          If IdP login finishes without redirecting back to wiki, click Open target page to load Confluence in the SSO window.
+        </p>
       )}
     </div>
   )
@@ -196,7 +354,15 @@ function ManualModeTabs({
         <button
           key={method.key}
           type="button"
-          onClick={() => onChange(activeMode === method.key ? null : method.key)}
+          onClick={() => {
+            const nextMode = activeMode === method.key ? null : method.key
+            console.log('[auth-diag] manual mode tab clicked', {
+              tab: method.key,
+              nextMode,
+              previousMode: activeMode,
+            })
+            onChange(nextMode)
+          }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             activeMode === method.key
               ? 'bg-accent text-white'
@@ -283,6 +449,15 @@ function CookieForm({
 
   const canSubmit = Boolean(baseUrl && cookie)
 
+  useEffect(() => {
+    console.log('[auth-diag] CookieForm state', {
+      baseUrl,
+      hasBaseUrl: Boolean(baseUrl),
+      cookieLength: cookie.length,
+      canSubmit,
+    })
+  }, [baseUrl, cookie, canSubmit])
+
   return (
     <div className="space-y-5 animate-fade-in stagger-3">
       <Input
@@ -292,17 +467,34 @@ function CookieForm({
         onChange={setCookie}
       />
       <p className="text-xs text-text-muted">
-        Copy cookies from browser DevTools → Application → Cookies after SSO login
+        In DevTools → Application → Cookies for wiki.heytea.com, copy the full header
+        (must include seraph.confluence, not only JSESSIONID). Then click Save Cookie — this does not open SSO.
       </p>
       <Button
         variant="secondary"
-        onClick={() =>
+        onClick={() => {
+          console.log('[auth-diag] Save Cookie clicked', {
+            baseUrl,
+            canSubmit,
+            cookieNames: cookie
+              .split(';')
+              .map((part) => part.trim().split('=')[0]?.trim())
+              .filter(Boolean),
+            cookieLength: cookie.length,
+          })
+          if (!canSubmit) {
+            console.warn('[auth-diag] Save Cookie blocked: missing baseUrl or cookie', {
+              hasBaseUrl: Boolean(baseUrl),
+              hasCookie: Boolean(cookie),
+            })
+            return
+          }
           void onSubmit({
             baseUrl,
             method: 'cookie',
             cookie,
           })
-        }
+        }}
         loading={isLoading}
         disabled={!canSubmit}
       >

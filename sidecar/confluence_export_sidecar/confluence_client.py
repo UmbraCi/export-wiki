@@ -4,11 +4,41 @@ from __future__ import annotations
 
 import html
 import re
+import sys
 from typing import Any
+from urllib.parse import urlparse
 
 from atlassian import Confluence
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _auth_diag(message: str) -> None:
+    print(f"[auth-diag] {message}", file=sys.stderr, flush=True)
+
+
+def _cookie_names(cookie_header: str) -> list[str]:
+    names: list[str] = []
+    for part in cookie_header.split(";"):
+        name = part.strip().split("=", 1)[0].strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def normalize_instance_url(base_url: str) -> str:
+    """Strip paths and query strings so REST calls target the Confluence origin."""
+    trimmed = base_url.strip()
+    if not trimmed:
+        raise ValueError("auth.base_url is required")
+
+    parsed = urlparse(trimmed)
+    if parsed.scheme != "https":
+        raise ValueError("Confluence URL must start with https://")
+    if not parsed.hostname:
+        raise ValueError("Confluence URL must include a host")
+
+    return f"https://{parsed.hostname}"
 
 
 def normalize_spaces(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -64,12 +94,21 @@ class ConfluenceClient:
 
     def __init__(self, auth: dict[str, Any]) -> None:
         self._auth = auth
+        method = str(self._auth.get("method", ""))
+        raw_base_url = str(self._auth.get("base_url", "")).rstrip("/")
+        cookie = str(self._auth.get("cookie") or "")
+        _auth_diag(
+            "ConfluenceClient init "
+            f"method={method!r} base_url={raw_base_url!r} "
+            f"cookie_names={_cookie_names(cookie)!r} cookie_length={len(cookie)}"
+        )
         self._client = self._build_client()
 
     def _build_client(self) -> Confluence:
-        base_url = str(self._auth.get("base_url", "")).rstrip("/")
-        if not base_url:
+        raw_base_url = str(self._auth.get("base_url", "")).rstrip("/")
+        if not raw_base_url:
             raise ValueError("auth.base_url is required")
+        base_url = normalize_instance_url(raw_base_url)
 
         method = str(self._auth.get("method", ""))
         wiki_url = f"{base_url}/wiki" if "/wiki" not in base_url else base_url
@@ -166,9 +205,24 @@ class ConfluenceClient:
         return normalize_search_results(raw_results)
 
     def fetch_current_user(self) -> dict[str, Any]:
+        _auth_diag("fetch_current_user calling rest/api/user/current")
         user = self._client.get("rest/api/user/current")
+        if not isinstance(user, dict):
+            _auth_diag("fetch_current_user response is not a dict")
+            raise ValueError("Confluence session is not authenticated")
+
+        display_name = str(user.get("displayName") or user.get("username") or "").strip()
+        user_type = str(user.get("type") or user.get("userType") or "").strip().lower()
+        _auth_diag(
+            "fetch_current_user response "
+            f"display_name={display_name!r} user_type={user_type!r}"
+        )
+        if not display_name or display_name.lower() == "anonymous" or user_type == "anonymous":
+            _auth_diag("fetch_current_user rejected: anonymous or missing display name")
+            raise ValueError("Confluence session is not authenticated")
+
         return {
-            "displayName": user.get("displayName") or user.get("username") or "",
+            "displayName": display_name,
             "accountId": user.get("accountId") or user.get("account_id") or "",
         }
 

@@ -1,12 +1,29 @@
 import { useConfigStore } from '../../stores/configStore'
 import { useExportStore } from '../../stores/exportStore'
 import { useSelectionStore } from '../../stores/selectionStore'
+import { useAuthStore } from '../../stores/authStore'
+import { useNavStore } from '../../stores/navStore'
 import Button from '../common/Button'
 import Input from '../common/Input'
 import Select from '../common/Select'
 import { useEffect } from 'react'
 
+function formatAuthMethod(method: string | null | undefined): string {
+  switch (method) {
+    case 'sso':
+      return 'SSO'
+    case 'api_token':
+      return 'API Token'
+    case 'cookie':
+      return 'Session Cookie'
+    default:
+      return 'Unknown'
+  }
+}
+
 function SettingsPanel() {
+  const { status, logout, reconnectWithSso, isLoading: authLoading } = useAuthStore()
+  const setActiveView = useNavStore((s) => s.setActiveView)
   const { config, loadConfig, saveConfig, updateSyncSettings, isLoading } = useConfigStore()
   const { setOptions } = useExportStore()
   const selectedPageIds = useSelectionStore((s) => s.selectedPageIds)
@@ -47,6 +64,41 @@ function SettingsPanel() {
 
         {/* Content */}
         <div className="p-8 space-y-6">
+          <div className="space-y-4 pb-6 border-b border-border">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">Account</h3>
+              <p className="text-xs text-text-muted mt-1">
+                Manage Confluence sign-in, session cookies, and SSO.
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-bg-secondary border border-border px-4 py-3 space-y-2">
+              <p className="text-sm text-text-muted">Confluence URL</p>
+              <p className="text-sm text-text-primary font-medium break-all">
+                {status.baseUrl ?? '—'}
+              </p>
+              <p className="text-sm text-text-muted pt-1">Authentication</p>
+              <p className="text-sm text-text-primary font-medium">
+                {formatAuthMethod(status.method)}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setActiveView('authentication')}
+              >
+                Open authentication
+              </Button>
+              <Button onClick={() => void reconnectWithSso()} loading={authLoading}>
+                Sign in again (SSO)
+              </Button>
+              <Button variant="secondary" onClick={() => void logout()} loading={authLoading}>
+                Logout
+              </Button>
+            </div>
+          </div>
+
           <Input
             label="Output Directory"
             placeholder="~/Documents/confluence-export"

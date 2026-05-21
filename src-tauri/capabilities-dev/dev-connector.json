@@ -1,0 +1,7 @@
+{
+  "$schema": "https://v2.tauri.app/schemas/2.0.0/capabilities.json",
+  "identifier": "dev-connector",
+  "description": "Permissions for tauri-plugin-connector dev tooling (debug builds only)",
+  "windows": ["main", "confluence-sso"],
+  "permissions": ["connector:default"]
+}

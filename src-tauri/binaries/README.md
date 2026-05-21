@@ -1,4 +1,6 @@
-Place `cme-sidecar` binaries here named per Tauri’s `externalBin` convention:
+Place `cme-sidecar` binaries here named per Tauri’s `externalBin` convention (files are gitignored; generated locally):
 
-- **`cme-sidecar-aarch64-apple-darwin`** — minimal dev shim that runs `uv` against `repo/sidecar`
-- Production: run `npm run build:sidecar` and rename/copy the PyInstaller artifact to match the active target triple expected by `tauri build`.
+- **Dev:** `npm run setup` creates `cme-sidecar-<host-triple>` as a shim that runs `uv` against `sidecar/`.
+- **Production:** `npm run prepare:sidecar` copies the PyInstaller binary from `.build/sidecar/dist/` into `cme-sidecar-<host-triple>` for `tauri build`.
+
+Intermediate build outputs live under `.build/` (see `scripts/build-paths.mjs`), not under `sidecar/`.

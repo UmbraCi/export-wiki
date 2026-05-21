@@ -1,18 +1,16 @@
-use chrono::{DateTime, Duration, Utc};
-
-use crate::contracts::SyncSettings;
-
-pub fn next_run_after(settings: &SyncSettings, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
-    if !settings.enabled {
-        return None;
-    }
-
-    Some(now + Duration::minutes(settings.interval_minutes as i64))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use chrono::{DateTime, Duration, Utc};
+
+    use crate::contracts::SyncSettings;
+
+    fn next_run_after(settings: &SyncSettings, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        if !settings.enabled {
+            return None;
+        }
+
+        Some(now + Duration::minutes(settings.interval_minutes as i64))
+    }
 
     #[test]
     fn disabled_sync_has_no_next_run() {

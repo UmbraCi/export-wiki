@@ -14,7 +14,7 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    outDir: 'dist',
+    outDir: '.build/frontend',
     emptyOutDir: true,
   },
   envPrefix: ['VITE_', 'TAURI_'],

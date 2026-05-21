@@ -7,10 +7,16 @@ import type {
   PageNode,
   SearchResult,
   SpaceInfo,
+  SsoSessionInfo,
+  SsoSessionStatus,
 } from './contracts'
 
 export const api = {
-  startSsoLogin: (baseUrl: string) => invoke<AuthStatus>('start_sso_login', { baseUrl }),
+  startSsoLogin: (baseUrl: string) => invoke<SsoSessionInfo>('start_sso_login', { baseUrl }),
+  getSsoSessionStatus: () => invoke<SsoSessionStatus>('get_sso_session_status'),
+  navigateSsoWindow: (url: string) => invoke<void>('navigate_sso_window', { url }),
+  completeSsoLogin: () => invoke<AuthStatus>('complete_sso_login'),
+  cancelSsoLogin: () => invoke<void>('cancel_sso_login'),
   saveManualAuth: (config: ManualAuthConfig) => invoke<AuthStatus>('save_manual_auth', { config }),
   getAuthStatus: () => invoke<AuthStatus>('get_auth_status'),
   logout: () => invoke<AuthStatus>('logout'),
@@ -34,4 +40,6 @@ export type {
   PageNode,
   SearchResult,
   SpaceInfo,
+  SsoSessionInfo,
+  SsoSessionStatus,
 } from './contracts'

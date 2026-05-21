@@ -4,8 +4,13 @@ sidecar/**/*.pyc
 sidecar/**/__pycache__/
 **/*.egg-info/
 
+# Build outputs (see scripts/build-paths.mjs)
+.build/
 dist/
 release/
+sidecar/build/
+sidecar/cme-sidecar.spec
+src-tauri/binaries/cme-sidecar-*
 .DS_Store
 *.log
 .env
@@ -15,3 +20,7 @@ release/
 # Rust/Tauri
 src-tauri/target/
 Cargo.lock
+
+.cursor/*
+!.cursor/mcp.json
+docs/

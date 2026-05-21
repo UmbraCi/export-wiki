@@ -2,9 +2,10 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { sidecarDist } from "./build-paths.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const distDir = path.join(root, "sidecar", "dist");
+const distDir = sidecarDist;
 const binariesDir = path.join(root, "src-tauri", "binaries");
 const isWin = process.platform === "win32";
 const distName = isWin ? "cme-sidecar.exe" : "cme-sidecar";

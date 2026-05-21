@@ -19,6 +19,23 @@ pub struct AuthStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SsoSessionInfo {
+    pub active: bool,
+    pub entry_url: String,
+    pub base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SsoSessionStatus {
+    pub active: bool,
+    pub entry_url: Option<String>,
+    pub current_url: Option<String>,
+    pub wiki_session_detected: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SpaceInfo {
     pub key: String,
     pub name: String,

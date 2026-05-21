@@ -6,9 +6,10 @@
     "beforeDevCommand": "npm run dev:frontend",
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build:frontend",
-    "frontendDist": "../dist"
+    "frontendDist": "../.build/frontend"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Confluence Wiki Exporter",

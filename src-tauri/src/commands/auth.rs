@@ -1,9 +1,27 @@
 #![allow(dead_code)]
 
 use crate::auth::SecretStore;
-use crate::contracts::AuthStatus;
+use crate::contracts::{AuthStatus, SsoSessionInfo, SsoSessionStatus};
+use crate::sidecar::client::SidecarClient;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+/// Diagnostic logging for manual auth / cookie flow. Logs cookie names only — never values.
+macro_rules! auth_diag {
+    ($($arg:tt)*) => {
+        eprintln!("[auth-diag] {}", format!($($arg)*));
+    };
+}
+
+fn cookie_names_from_header(header: &str) -> Vec<String> {
+    header
+        .split(';')
+        .filter_map(|part| part.trim().split('=').next())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,22 +87,112 @@ fn validate_manual_auth(config: &ManualAuthConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn start_sso_login(
+pub fn start_sso_login(
     base_url: String,
     app: tauri::AppHandle,
     state: State<'_, crate::state::AppState>,
-) -> Result<AuthStatus, String> {
-    crate::auth::webview_auth::start_sso_login(app, base_url, &state.secret_store).await
+) -> Result<SsoSessionInfo, String> {
+    crate::auth::webview_auth::open_sso_window(app, base_url, &state.sso_session)
 }
 
 #[tauri::command]
-pub fn save_manual_auth(
-    config: ManualAuthConfig,
-    state: State<crate::state::AppState>,
+pub fn get_sso_session_status(
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
+) -> Result<SsoSessionStatus, String> {
+    crate::auth::webview_auth::get_sso_session_status(&app, &state.sso_session)
+}
+
+#[tauri::command]
+pub fn navigate_sso_window(
+    url: String,
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
+) -> Result<(), String> {
+    crate::auth::webview_auth::navigate_sso_window(&app, url, &state.sso_session)
+}
+
+#[tauri::command]
+pub async fn complete_sso_login(
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
 ) -> Result<AuthStatus, String> {
-    validate_manual_auth(&config)?;
-    state.secret_store.save_manual_auth(&config)?;
-    state.secret_store.load_status()
+    crate::auth::webview_auth::complete_sso_login(app, &state.secret_store, &state.sso_session).await
+}
+
+#[tauri::command]
+pub fn cancel_sso_login(
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
+) -> Result<(), String> {
+    crate::auth::webview_auth::cancel_sso_login(&app, &state.sso_session)
+}
+
+#[tauri::command]
+pub async fn save_manual_auth(
+    config: ManualAuthConfig,
+    state: State<'_, crate::state::AppState>,
+) -> Result<AuthStatus, String> {
+    auth_diag!(
+        "save_manual_auth called method={:?} base_url={}",
+        config.method,
+        config.base_url
+    );
+
+    if config.method == ManualAuthMethod::Cookie {
+        let cookie = config.cookie.as_deref().unwrap_or("");
+        auth_diag!(
+            "cookie payload names={:?} length={}",
+            cookie_names_from_header(cookie),
+            cookie.len()
+        );
+    }
+
+    validate_manual_auth(&config).map_err(|error| {
+        auth_diag!("validation failed: {error}");
+        error
+    })?;
+
+    state.secret_store.save_manual_auth(&config).map_err(|error| {
+        auth_diag!("secret store save failed: {error}");
+        error
+    })?;
+    auth_diag!("credentials saved to secret store");
+
+    if config.method == ManualAuthMethod::Cookie {
+        let sidecar_auth = state
+            .secret_store
+            .load_sidecar_auth()?
+            .ok_or_else(|| "Authentication required".to_string())?;
+        auth_diag!(
+            "validating cookie via sidecar base_url={} method={:?}",
+            sidecar_auth.base_url,
+            sidecar_auth.method
+        );
+
+        let client = SidecarClient::resolve_default().map_err(|error| {
+            auth_diag!("sidecar resolve failed: {error}");
+            error
+        })?;
+
+        if let Err(error) = client.get_current_user(&sidecar_auth).await {
+            auth_diag!("cookie validation failed: {error}");
+            let _ = state.secret_store.clear();
+            return Err(format!(
+                "Cookie validation failed: {error}. Copy all wiki cookies (include seraph.confluence), not only JSESSIONID."
+            ));
+        }
+
+        auth_diag!("cookie validation succeeded");
+    }
+
+    let status = state.secret_store.load_status()?;
+    auth_diag!(
+        "save_manual_auth complete authenticated={} method={:?}",
+        status.authenticated,
+        status.method
+    );
+    Ok(status)
 }
 
 #[tauri::command]

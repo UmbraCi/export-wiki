@@ -4,7 +4,9 @@
   "type": "module",
   "description": "Tauri app for exporting Confluence Wiki content",
   "scripts": {
-    "dev": "tauri dev",
+    "setup": "node scripts/setup.mjs",
+    "start": "tauri dev --features dev-connector",
+    "dev": "npm run start",
     "dev:frontend": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -12,13 +14,14 @@
     "build:frontend": "vite build",
     "preview": "vite preview",
     "test:sidecar": "cd sidecar && uv run pytest",
-    "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar confluence_export_sidecar/__main__.py",
+    "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar --distpath ../.build/sidecar/dist --workpath ../.build/sidecar/work confluence_export_sidecar/__main__.py",
     "prepare:sidecar": "npm run build:sidecar && node scripts/prepare-sidecar.mjs",
     "build:mvp": "npm run prepare:sidecar && npm run build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@zumer/snapdom": "^1.9.14",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.2"

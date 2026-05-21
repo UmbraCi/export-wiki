@@ -1,6 +1,0 @@
-#!/usr/bin/env sh
-set -eu
-BIN_DIR="$(CDPATH="" cd "$(dirname "$0")" && pwd)"
-REPO="$(CDPATH="" cd "$BIN_DIR/../../.." && pwd)"
-SC="$REPO/sidecar"
-exec uv run --directory "$SC" python -m confluence_export_sidecar
