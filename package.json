@@ -1,0 +1,38 @@
+{
+  "name": "export-wiki",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tauri app for exporting Confluence Wiki content",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:frontend": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tauri build",
+    "build:frontend": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.5.0",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vitest": "^4.1.7"
+  }
+}

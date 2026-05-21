@@ -1,0 +1,267 @@
+@import "tailwindcss";
+
+@theme {
+  /* Apple-style Typography */
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'DM Sans', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'DM Sans', sans-serif;
+
+  /* Light Mode Colors */
+  --color-app-white: #ffffff;
+  --color-app-gray-50: #fbfbfd;
+  --color-app-gray-100: #f5f5f7;
+  --color-app-gray-200: #e8e8ed;
+  --color-app-gray-300: #d2d2d7;
+  --color-app-gray-400: #86868b;
+  --color-app-gray-500: #6e6e73;
+  --color-app-gray-600: #424245;
+  --color-app-gray-900: #1d1d1f;
+
+  --color-app-blue: #0071e3;
+  --color-app-blue-hover: #0077ed;
+  --color-app-blue-light: #42a1ec;
+
+  --color-app-green: #34c759;
+  --color-app-red: #ff3b30;
+  --color-app-orange: #ff9500;
+
+  /* Dark Mode Colors */
+  --color-dark-bg: #000000;
+  --color-dark-bg-secondary: #1c1c1e;
+  --color-dark-bg-elevated: #2c2c2e;
+  --color-dark-bg-tertiary: #3c3c3e;
+  --color-dark-text: #ffffff;
+  --color-dark-text-secondary: #ebebf5;
+  --color-dark-text-muted: #8e8e93;
+  --color-dark-border: #3d3d3f;
+  --color-dark-blue: #0a84ff;
+  --color-dark-blue-hover: #409cff;
+  --color-dark-green: #32d74b;
+  --color-dark-red: #ff453a;
+  --color-dark-orange: #ff9f0a;
+
+  /* Semantic Mappings - Light (default) */
+  --color-bg-primary: var(--color-app-white);
+  --color-bg-secondary: var(--color-app-gray-100);
+  --color-bg-card: var(--color-app-white);
+  --color-bg-elevated: var(--color-app-gray-50);
+
+  --color-text-primary: var(--color-app-gray-900);
+  --color-text-secondary: var(--color-app-gray-500);
+  --color-text-muted: var(--color-app-gray-400);
+
+  --color-accent: var(--color-app-blue);
+  --color-accent-hover: var(--color-app-blue-hover);
+  --color-border: var(--color-app-gray-300);
+  --color-success: var(--color-app-green);
+  --color-error: var(--color-app-red);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16), 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+
+/* Base Styles - Light Mode (default) */
+html {
+  background-color: var(--color-app-white);
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-app-gray-100);
+  color: var(--color-app-gray-900);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ==================== DARK MODE ==================== */
+
+/* System preference */
+@media (prefers-color-scheme: dark) {
+  html:not(.light-mode) {
+    background-color: var(--color-dark-bg);
+    color-scheme: dark;
+  }
+
+  html:not(.light-mode) body {
+    background-color: var(--color-dark-bg);
+    color: var(--color-dark-text);
+  }
+
+  /* Override semantic colors for dark mode */
+  html:not(.light-mode) {
+    --color-bg-primary: var(--color-dark-bg);
+    --color-bg-secondary: var(--color-dark-bg-secondary);
+    --color-bg-card: var(--color-dark-bg-elevated);
+    --color-bg-elevated: var(--color-dark-bg-tertiary);
+
+    --color-text-primary: var(--color-dark-text);
+    --color-text-secondary: var(--color-dark-text-secondary);
+    --color-text-muted: var(--color-dark-text-muted);
+
+    --color-accent: var(--color-dark-blue);
+    --color-accent-hover: var(--color-dark-blue-hover);
+    --color-border: var(--color-dark-border);
+    --color-success: var(--color-dark-green);
+    --color-error: var(--color-dark-red);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Manual dark mode override */
+html.dark-mode {
+  background-color: var(--color-dark-bg);
+  color-scheme: dark;
+}
+
+html.dark-mode body {
+  background-color: var(--color-dark-bg);
+  color: var(--color-dark-text);
+}
+
+html.dark-mode {
+  --color-bg-primary: var(--color-dark-bg);
+  --color-bg-secondary: var(--color-dark-bg-secondary);
+  --color-bg-card: var(--color-dark-bg-elevated);
+  --color-bg-elevated: var(--color-dark-bg-tertiary);
+
+  --color-text-primary: var(--color-dark-text);
+  --color-text-secondary: var(--color-dark-text-secondary);
+  --color-text-muted: var(--color-dark-text-muted);
+
+  --color-accent: var(--color-dark-blue);
+  --color-accent-hover: var(--color-dark-blue-hover);
+  --color-border: var(--color-dark-border);
+  --color-success: var(--color-dark-green);
+  --color-error: var(--color-dark-red);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Manual light mode override (overrides system preference) */
+html.light-mode {
+  background-color: var(--color-app-white);
+  color-scheme: light;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+* {
+  transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in { animation: fade-in-up 0.4s ease-out forwards; }
+.animate-scale-in { animation: scale-in 0.3s ease-out forwards; }
+.animate-slide-in { animation: slide-in-right 0.4s ease-out forwards; }
+
+.stagger-1 { animation-delay: 0.05s; opacity: 0; }
+.stagger-2 { animation-delay: 0.1s; opacity: 0; }
+.stagger-3 { animation-delay: 0.15s; opacity: 0; }
+.stagger-4 { animation-delay: 0.2s; opacity: 0; }
+.stagger-5 { animation-delay: 0.25s; opacity: 0; }
+.stagger-6 { animation-delay: 0.3s; opacity: 0; }
+
+/* ==================== COMPONENTS ==================== */
+
+.card-app {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: none;
+  overflow: hidden;
+}
+
+.btn-app-hover {
+  transition: all 0.2s ease-out;
+}
+
+.btn-app-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-app-hover:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.input-app:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.2);
+  border-color: var(--color-accent);
+}
+
+html.dark-mode .input-app:focus {
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.3);
+}
+
+.progress-app {
+  height: 6px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-app-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent) 0%, var(--color-app-blue-light, var(--color-dark-blue-hover)) 100%);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease-out;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* Focus Ring */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.3);
+}
+
+html.dark-mode :focus-visible {
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.4);
+}
+
+/* Selection */
+::selection { background: rgba(0, 113, 227, 0.2); }
+html.dark-mode ::selection { background: rgba(10, 132, 255, 0.3); }
