@@ -1,43 +1,68 @@
 #![allow(dead_code)]
 
-use crate::state::{AppState, AuthConfig};
+use crate::contracts::{AuthStatus};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AuthConfigureResult {
-    pub success: bool,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualAuthConfig {
+    pub base_url: String,
+    pub method: ManualAuthMethod,
+    pub username: Option<String>,
+    pub api_token: Option<String>,
+    pub cookie: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AuthTestResult {
-    pub success: bool,
-    pub message: String,
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManualAuthMethod {
+    ApiToken,
+    Cookie,
 }
 
-/// Configure authentication with Confluence credentials
-#[tauri::command]
-pub fn auth_configure(config: AuthConfig, state: State<AppState>) -> Result<AuthConfigureResult, String> {
-    let mut auth_config = state.auth_config.lock().map_err(|e| e.to_string())?;
-    *auth_config = Some(config);
-    Ok(AuthConfigureResult { success: true })
-}
-
-/// Test authentication with current configuration
-#[tauri::command]
-pub fn auth_test(state: State<AppState>) -> Result<AuthTestResult, String> {
-    let auth_config = state.auth_config.lock().map_err(|e| e.to_string())?;
-
-    if auth_config.is_none() {
-        return Ok(AuthTestResult {
-            success: false,
-            message: "Authentication not configured".to_string(),
-        });
+pub(crate) fn unauthenticated_status() -> AuthStatus {
+    AuthStatus {
+        authenticated: false,
+        method: None,
+        base_url: None,
+        display_name: None,
     }
+}
 
-    // TODO: Implement actual authentication test
-    Ok(AuthTestResult {
-        success: true,
-        message: "Authentication successful".to_string(),
-    })
+#[tauri::command]
+pub fn start_sso_login(base_url: String, _state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
+    let _ = base_url;
+    Err("SSO login is not connected yet".to_string())
+}
+
+#[tauri::command]
+pub fn save_manual_auth(
+    config: ManualAuthConfig,
+    _state: State<crate::state::AppState>,
+) -> Result<AuthStatus, String> {
+    let _ = config;
+    Ok(unauthenticated_status())
+}
+
+#[tauri::command]
+pub fn get_auth_status(_state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
+    Ok(unauthenticated_status())
+}
+
+#[tauri::command]
+pub fn logout(_state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
+    Ok(unauthenticated_status())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn unauthenticated_status_is_empty() {
+        let status = super::unauthenticated_status();
+
+        assert!(!status.authenticated);
+        assert!(status.method.is_none());
+        assert!(status.base_url.is_none());
+    }
 }
