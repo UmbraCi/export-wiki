@@ -27,6 +27,15 @@ pub struct StoredCredential {
     pub username: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidecarAuthConfig {
+    pub base_url: String,
+    pub method: AuthMethod,
+    pub username: Option<String>,
+    pub api_token: Option<String>,
+    pub cookie: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SsoAuthConfig {
     pub base_url: String,
@@ -38,6 +47,7 @@ pub trait SecretStore {
     fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String>;
     fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String>;
     fn load_status(&self) -> Result<AuthStatus, String>;
+    fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String>;
     fn clear(&self) -> Result<(), String>;
 }
 
@@ -66,6 +76,21 @@ fn credential_to_stored(credential: &InternalCredential) -> StoredCredential {
         base_url: credential.metadata.base_url.clone(),
         method: credential.metadata.method.clone(),
         username: credential.metadata.username.clone(),
+    }
+}
+
+fn credential_to_sidecar_auth(credential: &InternalCredential) -> SidecarAuthConfig {
+    let (api_token, cookie) = match credential.metadata.method {
+        AuthMethod::ApiToken => (Some(credential.secret.clone()), None),
+        AuthMethod::Cookie | AuthMethod::Sso => (None, Some(credential.secret.clone())),
+    };
+
+    SidecarAuthConfig {
+        base_url: credential.metadata.base_url.clone(),
+        method: credential.metadata.method.clone(),
+        username: credential.metadata.username.clone(),
+        api_token,
+        cookie,
     }
 }
 
@@ -141,6 +166,13 @@ impl SecretStore for InMemorySecretStore {
         })
     }
 
+    fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String> {
+        let guard = self.credential.lock().map_err(|e| e.to_string())?;
+        Ok(guard
+            .as_ref()
+            .map(credential_to_sidecar_auth))
+    }
+
     fn clear(&self) -> Result<(), String> {
         *self.credential.lock().map_err(|e| e.to_string())? = None;
         Ok(())
@@ -211,6 +243,10 @@ impl SecretStore for KeyringSecretStore {
             Some(credential) => credential_to_status(&credential),
             None => unauthenticated_status(),
         })
+    }
+
+    fn load_sidecar_auth(&self) -> Result<Option<SidecarAuthConfig>, String> {
+        Ok(self.load_credential()?.as_ref().map(credential_to_sidecar_auth))
     }
 
     fn clear(&self) -> Result<(), String> {

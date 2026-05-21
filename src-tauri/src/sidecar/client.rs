@@ -1,20 +1,29 @@
 //! Launch the packaged sidecar and exchange a single JSON-line request.
 
 use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use uuid::Uuid;
+
+use crate::auth::SidecarAuthConfig;
+use crate::contracts::AuthMethod;
 
 use super::protocol::{SidecarRequest, SidecarResponse, PROTOCOL_VERSION};
 
 /// Serializes one JSON request line understood by [`run_one_request`].
 pub fn build_ping_line(request_id: &str) -> String {
+    build_request_line("ping", request_id, json!({}))
+}
+
+pub fn build_request_line(request_type: &str, request_id: &str, payload: Value) -> String {
     let req = SidecarRequest {
         protocol_version: PROTOCOL_VERSION,
         request_id: request_id.to_string(),
-        request_type: "ping".to_string(),
-        payload: json!({}),
+        request_type: request_type.to_string(),
+        payload,
     };
 
     serde_json::to_string(&req).expect("SidecarRequest is always serializable")
@@ -24,8 +33,107 @@ pub fn parse_response(raw: &str) -> serde_json::Result<SidecarResponse> {
     serde_json::from_str(raw.trim())
 }
 
+pub fn auth_payload(auth: &SidecarAuthConfig) -> Value {
+    json!({
+        "base_url": auth.base_url,
+        "method": match auth.method {
+            AuthMethod::Sso => "sso",
+            AuthMethod::ApiToken => "api_token",
+            AuthMethod::Cookie => "cookie",
+        },
+        "username": auth.username,
+        "api_token": auth.api_token,
+        "cookie": auth.cookie,
+    })
+}
+
+pub fn resolve_sidecar_program() -> Result<PathBuf, String> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let triple = match (std::env::consts::ARCH, std::env::consts::OS) {
+        ("aarch64", "macos") => "aarch64-apple-darwin",
+        ("x86_64", "macos") => "x86_64-apple-darwin",
+        ("aarch64", "linux") => "aarch64-unknown-linux-gnu",
+        ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
+        ("x86_64", "windows") => "x86_64-pc-windows-msvc",
+        (arch, os) => return Err(format!("unsupported sidecar target {arch}-{os}")),
+    };
+
+    let candidate = manifest_dir.join(format!("binaries/cme-sidecar-{triple}"));
+    if candidate.exists() {
+        return Ok(candidate);
+    }
+
+    Err(format!(
+        "sidecar binary not found at {}",
+        candidate.display()
+    ))
+}
+
+pub struct SidecarClient {
+    program: PathBuf,
+}
+
+impl SidecarClient {
+    pub fn resolve_default() -> Result<Self, String> {
+        Ok(Self {
+            program: resolve_sidecar_program()?,
+        })
+    }
+
+    pub fn with_program(program: impl Into<PathBuf>) -> Self {
+        Self {
+            program: program.into(),
+        }
+    }
+
+    pub fn program(&self) -> &Path {
+        &self.program
+    }
+
+    pub async fn request(&self, request_type: &str, payload: Value) -> Result<SidecarResponse, String> {
+        let request_id = Uuid::new_v4().to_string();
+        let line = build_request_line(request_type, &request_id, payload);
+        let response = run_one_request(&self.program, &line).await?;
+
+        if !response.ok {
+            return Err(response
+                .error
+                .unwrap_or_else(|| "sidecar request failed".to_string()));
+        }
+
+        Ok(response)
+    }
+
+    pub async fn get_spaces(&self, auth: &SidecarAuthConfig) -> Result<SidecarResponse, String> {
+        self.request("get_spaces", json!({ "auth": auth_payload(auth) }))
+            .await
+    }
+
+    pub async fn get_page_tree(
+        &self,
+        auth: &SidecarAuthConfig,
+        space_key: &str,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "get_page_tree",
+            json!({
+                "auth": auth_payload(auth),
+                "space_key": space_key,
+            }),
+        )
+        .await
+    }
+
+    pub async fn get_current_user(
+        &self,
+        auth: &SidecarAuthConfig,
+    ) -> Result<SidecarResponse, String> {
+        self.request("get_current_user", json!({ "auth": auth_payload(auth) }))
+            .await
+    }
+}
+
 /// Spawn `program`, write one stdin line (`request_json_line`), then read one stdout JSON line.
-#[allow(dead_code)]
 pub async fn run_one_request(
     program: impl AsRef<OsStr>,
     request_json_line: impl AsRef<str>,
@@ -118,5 +226,37 @@ mod tests {
         let raw = build_ping_line("probe");
         assert!(raw.contains("\"type\":\"ping\""));
         assert!(raw.contains("\"request_id\":\"probe\""));
+    }
+
+    #[test]
+    fn auth_payload_maps_api_token_method() {
+        let payload = auth_payload(&SidecarAuthConfig {
+            base_url: "https://example.atlassian.net".into(),
+            method: AuthMethod::ApiToken,
+            username: Some("user@example.com".into()),
+            api_token: Some("secret".into()),
+            cookie: None,
+        });
+
+        assert_eq!(payload["method"], "api_token");
+        assert_eq!(payload["username"], "user@example.com");
+    }
+
+    #[test]
+    fn build_get_spaces_request_includes_auth_payload() {
+        let raw = build_request_line(
+            "get_spaces",
+            "r1",
+            json!({
+                "auth": {
+                    "base_url": "https://example.atlassian.net",
+                    "method": "cookie",
+                    "cookie": "session=abc"
+                }
+            }),
+        );
+
+        assert!(raw.contains("\"type\":\"get_spaces\""));
+        assert!(raw.contains("\"cookie\":\"session=abc\""));
     }
 }

@@ -22,6 +22,7 @@ pub struct AuthStatus {
 pub struct SpaceInfo {
     pub key: String,
     pub name: String,
+    #[serde(rename = "type")]
     pub space_type: String,
 }
 

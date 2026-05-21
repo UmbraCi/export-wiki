@@ -1,6 +1,7 @@
 import Layout from './components/Layout'
 import AuthPanel from './components/AuthPanel'
-import SpaceSelector from './components/SpaceSelector'
+import SpaceBrowser from './components/SpaceBrowser'
+import ContentPreview from './components/ContentPreview'
 import { useAuthStore } from './stores/authStore'
 
 function App() {
@@ -8,7 +9,14 @@ function App() {
 
   return (
     <Layout>
-      {status.authenticated ? <SpaceSelector /> : <AuthPanel />}
+      {status.authenticated ? (
+        <>
+          <SpaceBrowser />
+          <ContentPreview />
+        </>
+      ) : (
+        <AuthPanel />
+      )}
     </Layout>
   )
 }
