@@ -28,10 +28,12 @@ export interface PageNode {
   children: PageNode[]
 }
 
+export type ExportFormat = 'markdown' | 'html'
+
 export interface ExportOptions {
   pageIds: string[]
   outputDir: string
-  format: 'markdown'
+  format: ExportFormat
   includeAttachments: boolean
 }
 

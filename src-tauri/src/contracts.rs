@@ -35,12 +35,19 @@ pub struct PageNode {
     pub children: Vec<PageNode>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportFormat {
+    Markdown,
+    Html,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportOptions {
     pub page_ids: Vec<String>,
     pub output_dir: String,
-    pub format: String,
+    pub format: ExportFormat,
     pub include_attachments: bool,
 }
 

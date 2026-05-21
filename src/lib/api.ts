@@ -14,6 +14,7 @@ export const api = {
 export type {
   AuthMethod,
   AuthStatus,
+  ExportFormat,
   ExportOptions,
   ExportProgressEvent,
   ExportStats,

@@ -16,7 +16,8 @@ pub struct ExportedPage {
     pub page_id: String,
     pub title: String,
     pub filename: String,
-    pub markdown: String,
+    pub markdown: Option<String>,
+    pub html: Option<String>,
     pub attachments: Vec<ExportedAttachment>,
 }
 
@@ -56,13 +57,19 @@ pub fn sanitize_filename(filename: &str) -> String {
 pub fn write_exported_page(output_dir: &Path, page: &ExportedPage) -> Result<usize, String> {
     fs::create_dir_all(output_dir).map_err(|error| format!("create output dir: {error}"))?;
 
-    let markdown_filename = sanitize_filename(&page.filename);
-    let markdown_path = output_dir.join(markdown_filename);
-    if let Some(parent) = markdown_path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("create markdown parent: {error}"))?;
+    let content = page
+        .html
+        .as_deref()
+        .or(page.markdown.as_deref())
+        .ok_or_else(|| format!("exported page {} has no content", page.page_id))?;
+
+    let page_filename = sanitize_filename(&page.filename);
+    let page_path = output_dir.join(page_filename);
+    if let Some(parent) = page_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("create page parent: {error}"))?;
     }
-    fs::write(&markdown_path, &page.markdown)
-        .map_err(|error| format!("write markdown {}: {error}", markdown_path.display()))?;
+    fs::write(&page_path, content)
+        .map_err(|error| format!("write page {}: {error}", page_path.display()))?;
 
     let mut attachments_written = 0;
     for attachment in &page.attachments {
@@ -99,7 +106,8 @@ mod tests {
             page_id: "123".into(),
             title: "Home".into(),
             filename: "Home.md".into(),
-            markdown: "# Home\n".into(),
+            markdown: Some("# Home\n".into()),
+            html: None,
             attachments: vec![ExportedAttachment {
                 filename: "diagram.png".into(),
                 relative_path: "attachments/diagram.png".into(),
@@ -111,5 +119,36 @@ mod tests {
 
         assert!(temp.path().join("Home.md").exists());
         assert!(temp.path().join("attachments/diagram.png").exists());
+    }
+
+    #[test]
+    fn writes_html_and_markdown_paths_are_distinct() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let markdown_page = ExportedPage {
+            page_id: "123".into(),
+            title: "Home".into(),
+            filename: "Home.md".into(),
+            markdown: Some("# Home\n".into()),
+            html: None,
+            attachments: vec![],
+        };
+        let html_page = ExportedPage {
+            page_id: "123".into(),
+            title: "Home".into(),
+            filename: "Home.html".into(),
+            markdown: None,
+            html: Some("<h1>Home</h1>".into()),
+            attachments: vec![],
+        };
+
+        write_exported_page(temp.path(), &markdown_page).expect("write markdown");
+        write_exported_page(temp.path(), &html_page).expect("write html");
+
+        assert!(temp.path().join("Home.md").exists());
+        assert!(temp.path().join("Home.html").exists());
+        assert_ne!(
+            temp.path().join("Home.md"),
+            temp.path().join("Home.html")
+        );
     }
 }

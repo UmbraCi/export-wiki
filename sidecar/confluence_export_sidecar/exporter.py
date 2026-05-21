@@ -35,7 +35,7 @@ def sanitize_filename(filename: str) -> str:
     """Sanitize a filename for cross-platform filesystem writes."""
     sanitized = _CONTROL_CHARS.sub("", filename).rstrip(" .")
     stem = Path(sanitized).stem.upper()
-    if stem in _WINDOW_RESERVED:
+    if stem in _WINDOWS_RESERVED:
         sanitized = f"{sanitized}_"
     return sanitized[:255] or "untitled"
 
@@ -124,43 +124,75 @@ def _download_attachment_content(attachment: Any, base_url: str) -> bytes | None
     return response.content
 
 
+def build_exported_page(
+    *,
+    page_id: str,
+    title: str,
+    content: str,
+    format: str = "markdown",
+    attachments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build a sidecar export payload for Markdown or HTML output."""
+    safe_title = sanitize_filename(title)
+    manifest = build_attachment_manifest(title, attachments or [])
+
+    if format == "html":
+        return {
+            "pageId": page_id,
+            "title": title,
+            "filename": f"{safe_title}.html",
+            "html": content,
+            "attachments": manifest,
+        }
+
+    return {
+        "pageId": page_id,
+        "title": title,
+        "filename": f"{safe_title}.md",
+        "markdown": content,
+        "attachments": manifest,
+    }
+
+
 def export_page(
     page_id: str,
     auth: dict[str, Any],
     include_attachments: bool,
+    export_format: str = "markdown",
 ) -> dict[str, Any]:
-    """Export one Confluence page to Markdown and attachment manifests."""
+    """Export one Confluence page to Markdown or HTML and attachment manifests."""
     base_url = _configure_cme(auth, include_attachments)
     page = Page.from_id(int(page_id), base_url)
     if page.title == "Page not accessible":
         raise ValueError(f"Page {page_id} is not accessible")
 
-    markdown = page.markdown
+    content = page.html if export_format == "html" else page.markdown
     raw_attachments: list[dict[str, Any]] = []
     if include_attachments:
         for attachment in page._attachments_for_export():  # noqa: SLF001
-            content = _download_attachment_content(attachment, base_url)
-            if content is None:
+            attachment_content = _download_attachment_content(attachment, base_url)
+            if attachment_content is None:
                 continue
             filename = sanitize_filename(attachment.filename)
-            raw_attachments.append({"filename": filename, "content": content})
+            raw_attachments.append({"filename": filename, "content": attachment_content})
 
-    return {
-        "pageId": str(page_id),
-        "title": page.title,
-        "filename": f"{sanitize_filename(page.title)}.md",
-        "markdown": markdown,
-        "attachments": build_attachment_manifest(page.title, raw_attachments),
-    }
+    return build_exported_page(
+        page_id=str(page_id),
+        title=page.title,
+        content=content,
+        format=export_format,
+        attachments=raw_attachments,
+    )
 
 
 def export_pages(
     auth: dict[str, Any],
     page_ids: list[str],
     include_attachments: bool,
+    export_format: str = "markdown",
 ) -> list[dict[str, Any]]:
     """Export multiple pages for the sidecar export_pages command."""
     return [
-        export_page(page_id, auth, include_attachments)
+        export_page(page_id, auth, include_attachments, export_format)
         for page_id in page_ids
     ]

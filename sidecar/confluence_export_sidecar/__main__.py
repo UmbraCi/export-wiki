@@ -59,15 +59,17 @@ def _dispatch(req: dict) -> dict:
             return _error_response(request_id, "page_ids is required")
 
         export_format = str(payload.get("format") or "markdown")
-        if export_format != "markdown":
-            return _error_response(
-                request_id,
-                "Only Markdown export is available in this build",
-            )
+        if export_format not in {"markdown", "html"}:
+            return _error_response(request_id, f"unsupported export format {export_format!r}")
 
         include_attachments = bool(payload.get("include_attachments", True))
         try:
-            pages = run_export_pages(auth, [str(page_id) for page_id in page_ids], include_attachments)
+            pages = run_export_pages(
+                auth,
+                [str(page_id) for page_id in page_ids],
+                include_attachments,
+                export_format,
+            )
             return success_response(request_id, {"pages": pages})
         except Exception as exc:  # noqa: BLE001
             return _error_response(request_id, str(exc))

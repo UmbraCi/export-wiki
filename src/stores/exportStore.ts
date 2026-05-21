@@ -9,7 +9,10 @@ export interface ExportLogEntry {
   message: string
 }
 
-export type ExportPanelOptions = Pick<ExportOptions, 'outputDir' | 'includeAttachments'>
+export type ExportPanelOptions = Pick<
+  ExportOptions,
+  'outputDir' | 'includeAttachments' | 'format'
+>
 
 function sanitizeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -55,6 +58,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
   options: {
     includeAttachments: true,
     outputDir: '',
+    format: 'markdown',
   },
   error: null,
 
@@ -93,7 +97,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
       await api.exportPages({
         pageIds,
         outputDir: options.outputDir,
-        format: 'markdown',
+        format: options.format,
         includeAttachments: options.includeAttachments,
       })
       set({ isExporting: false, progress: 100 })

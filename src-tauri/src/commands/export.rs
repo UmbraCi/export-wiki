@@ -11,7 +11,7 @@ use crate::sidecar::client::SidecarClient;
 use crate::state::AppState;
 
 const EMPTY_SELECTION: &str = "Select at least one page to export";
-const MARKDOWN_ONLY: &str = "Only Markdown export is available in this build";
+const UNSUPPORTED_FORMAT: &str = "Unsupported export format";
 const AUTH_REQUIRED: &str = "Authentication required";
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,7 +43,10 @@ struct SidecarExportedPage {
     page_id: String,
     title: String,
     filename: String,
-    markdown: String,
+    #[serde(default)]
+    markdown: Option<String>,
+    #[serde(default)]
+    html: Option<String>,
     attachments: Vec<SidecarExportedAttachment>,
 }
 
@@ -78,6 +81,7 @@ fn map_exported_page(page: SidecarExportedPage) -> ExportedPage {
         title: page.title,
         filename: page.filename,
         markdown: page.markdown,
+        html: page.html,
         attachments: page
             .attachments
             .into_iter()
@@ -116,8 +120,8 @@ pub async fn export_pages(
         return Err(EMPTY_SELECTION.to_string());
     }
 
-    if options.format != "markdown" {
-        return Err(MARKDOWN_ONLY.to_string());
+    if options.format != "markdown" && options.format != "html" {
+        return Err(UNSUPPORTED_FORMAT.to_string());
     }
 
     if options.output_dir.trim().is_empty() {
@@ -228,8 +232,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_markdown_format_message_is_stable() {
-        assert_eq!(MARKDOWN_ONLY, "Only Markdown export is available in this build");
+    fn unsupported_format_message_is_stable() {
+        assert_eq!(UNSUPPORTED_FORMAT, "Unsupported export format");
     }
 
     #[test]
@@ -262,6 +266,26 @@ mod tests {
 
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].filename, "Home.md");
+        assert_eq!(pages[0].markdown.as_deref(), Some("# Home\n"));
         assert_eq!(pages[0].attachments[0].relative_path, "attachments/diagram.png");
+    }
+
+    #[test]
+    fn maps_sidecar_html_export_payload() {
+        let payload = serde_json::json!({
+            "pages": [{
+                "pageId": "123",
+                "title": "Home",
+                "filename": "Home.html",
+                "html": "<h1>Home</h1>",
+                "attachments": []
+            }]
+        });
+
+        let pages = parse_exported_pages(&payload).expect("pages");
+
+        assert_eq!(pages[0].filename, "Home.html");
+        assert_eq!(pages[0].html.as_deref(), Some("<h1>Home</h1>"));
+        assert!(pages[0].markdown.is_none());
     }
 }

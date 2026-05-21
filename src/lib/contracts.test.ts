@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExportOptions, ExportProgressEvent } from './contracts'
 
 describe('shared frontend contracts', () => {
-  it('keeps markdown as the only MVP export format', () => {
+  it('defaults export format to markdown', () => {
     const options: ExportOptions = {
       pageIds: ['123'],
       outputDir: '/tmp/export-wiki',
@@ -11,6 +11,17 @@ describe('shared frontend contracts', () => {
     }
 
     expect(options.format).toBe('markdown')
+  })
+
+  it('allows html export format', () => {
+    const options: ExportOptions = {
+      pageIds: ['123'],
+      outputDir: '/tmp/export-wiki',
+      format: 'html',
+      includeAttachments: false,
+    }
+
+    expect(options.format).toBe('html')
   })
 
   it('represents progress without exposing credentials', () => {

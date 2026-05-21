@@ -51,18 +51,32 @@ function ExportPanel() {
 
         <div className="space-y-2">
           <span className="text-sm font-medium text-text-primary">Export Format</span>
-          <div className="rounded-lg border border-border bg-bg-elevated px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-text-primary">Markdown (.md)</span>
-              <span className="text-xs text-accent font-medium">Selected</span>
-            </div>
-            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-4 opacity-60">
-              <span className="text-sm text-text-muted">HTML (.html)</span>
-              <span className="text-xs text-text-muted">Unavailable</span>
-            </div>
-            <p className="text-xs text-text-muted mt-3">
-              HTML export is planned after the Markdown MVP is stable.
-            </p>
+          <div className="rounded-lg border border-border bg-bg-elevated px-4 py-3 space-y-3">
+            {([
+              { value: 'markdown' as const, label: 'Markdown (.md)' },
+              { value: 'html' as const, label: 'HTML (.html)' },
+            ]).map((formatOption) => {
+              const selected = options.format === formatOption.value
+              return (
+                <button
+                  key={formatOption.value}
+                  type="button"
+                  onClick={() => setOptions({ format: formatOption.value })}
+                  className={`w-full flex items-center justify-between gap-4 rounded-md px-2 py-1 transition-colors ${
+                    selected ? 'text-text-primary' : 'text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  <span className="text-sm">{formatOption.label}</span>
+                  <span
+                    className={`text-xs font-medium ${
+                      selected ? 'text-accent' : 'text-text-muted'
+                    }`}
+                  >
+                    {selected ? 'Selected' : 'Choose'}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
