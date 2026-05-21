@@ -127,7 +127,7 @@ function AuthPanel() {
               Sign in with SSO
             </Button>
             <p className="text-xs text-text-muted">
-              Opens Confluence in a secure browser window (coming in Task 6).
+              Opens Confluence in a secure browser window for SSO sign-in.
             </p>
           </div>
 

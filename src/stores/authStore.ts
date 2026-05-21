@@ -62,6 +62,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { baseUrl } = get()
     set({ isLoading: true, error: null })
 
+    if (!baseUrl.startsWith('https://')) {
+      set({
+        error: 'Confluence URL must start with https://',
+        isLoading: false,
+      })
+      return
+    }
+
     try {
       const status = await api.startSsoLogin(baseUrl)
       set({ status, isLoading: false })

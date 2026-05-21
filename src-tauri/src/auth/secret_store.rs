@@ -27,8 +27,16 @@ pub struct StoredCredential {
     pub username: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SsoAuthConfig {
+    pub base_url: String,
+    pub cookie: String,
+    pub display_name: Option<String>,
+}
+
 pub trait SecretStore {
     fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String>;
+    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String>;
     fn load_status(&self) -> Result<AuthStatus, String>;
     fn clear(&self) -> Result<(), String>;
 }
@@ -90,6 +98,21 @@ fn build_credential(config: &ManualAuthConfig) -> Result<InternalCredential, Str
     })
 }
 
+fn build_sso_credential(config: &SsoAuthConfig) -> Result<InternalCredential, String> {
+    if config.cookie.trim().is_empty() {
+        return Err("SSO authentication requires session cookies".to_string());
+    }
+
+    Ok(InternalCredential {
+        metadata: StoredMetadata {
+            base_url: config.base_url.clone(),
+            method: AuthMethod::Sso,
+            username: config.display_name.clone(),
+        },
+        secret: config.cookie.clone(),
+    })
+}
+
 #[derive(Default)]
 pub struct InMemorySecretStore {
     credential: Mutex<Option<InternalCredential>>,
@@ -98,6 +121,13 @@ pub struct InMemorySecretStore {
 impl SecretStore for InMemorySecretStore {
     fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String> {
         let credential = build_credential(config)?;
+        let stored = credential_to_stored(&credential);
+        *self.credential.lock().map_err(|e| e.to_string())? = Some(credential);
+        Ok(stored)
+    }
+
+    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String> {
+        let credential = build_sso_credential(config)?;
         let stored = credential_to_stored(&credential);
         *self.credential.lock().map_err(|e| e.to_string())? = Some(credential);
         Ok(stored)
@@ -150,13 +180,9 @@ impl KeyringSecretStore {
 
         Ok(Some(InternalCredential { metadata, secret }))
     }
-}
 
-impl SecretStore for KeyringSecretStore {
-    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String> {
-        let credential = build_credential(config)?;
+    fn persist_credential(&self, credential: InternalCredential) -> Result<StoredCredential, String> {
         let stored = credential_to_stored(&credential);
-
         let metadata_json =
             serde_json::to_string(&credential.metadata).map_err(|e| e.to_string())?;
 
@@ -168,6 +194,16 @@ impl SecretStore for KeyringSecretStore {
             .map_err(|e| e.to_string())?;
 
         Ok(stored)
+    }
+}
+
+impl SecretStore for KeyringSecretStore {
+    fn save_manual_auth(&self, config: &ManualAuthConfig) -> Result<StoredCredential, String> {
+        self.persist_credential(build_credential(config)?)
+    }
+
+    fn save_sso_auth(&self, config: &SsoAuthConfig) -> Result<StoredCredential, String> {
+        self.persist_credential(build_sso_credential(config)?)
     }
 
     fn load_status(&self) -> Result<AuthStatus, String> {

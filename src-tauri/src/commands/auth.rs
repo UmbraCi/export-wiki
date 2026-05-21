@@ -69,9 +69,12 @@ fn validate_manual_auth(config: &ManualAuthConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn start_sso_login(base_url: String, _state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
-    let _ = base_url;
-    Err("SSO login is not connected yet".to_string())
+pub async fn start_sso_login(
+    base_url: String,
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
+) -> Result<AuthStatus, String> {
+    crate::auth::webview_auth::start_sso_login(app, base_url, &state.secret_store).await
 }
 
 #[tauri::command]
