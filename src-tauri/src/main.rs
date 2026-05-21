@@ -3,6 +3,7 @@
 mod auth;
 mod contracts;
 mod commands;
+mod export;
 mod sidecar;
 mod state;
 

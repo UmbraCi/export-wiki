@@ -6,6 +6,7 @@ import json
 import sys
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
+from confluence_export_sidecar.exporter import export_pages as run_export_pages
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
 
@@ -45,6 +46,29 @@ def _dispatch(req: dict) -> dict:
                     {"pages": client.fetch_page_tree(str(space_key))},
                 )
             return success_response(request_id, {"user": client.fetch_current_user()})
+        except Exception as exc:  # noqa: BLE001
+            return _error_response(request_id, str(exc))
+
+    if req_type == "export_pages":
+        auth = payload.get("auth")
+        if not auth:
+            return _error_response(request_id, "auth payload is required")
+
+        page_ids = payload.get("page_ids") or []
+        if not page_ids:
+            return _error_response(request_id, "page_ids is required")
+
+        export_format = str(payload.get("format") or "markdown")
+        if export_format != "markdown":
+            return _error_response(
+                request_id,
+                "Only Markdown export is available in this build",
+            )
+
+        include_attachments = bool(payload.get("include_attachments", True))
+        try:
+            pages = run_export_pages(auth, [str(page_id) for page_id in page_ids], include_attachments)
+            return success_response(request_id, {"pages": pages})
         except Exception as exc:  # noqa: BLE001
             return _error_response(request_id, str(exc))
 

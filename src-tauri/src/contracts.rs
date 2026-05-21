@@ -34,3 +34,32 @@ pub struct PageNode {
     pub parent_id: Option<String>,
     pub children: Vec<PageNode>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportOptions {
+    pub page_ids: Vec<String>,
+    pub output_dir: String,
+    pub format: String,
+    pub include_attachments: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportStats {
+    pub total: u32,
+    pub exported: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub attachments: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportProgressEvent {
+    pub page_id: Option<String>,
+    pub status: String,
+    pub progress: u32,
+    pub stats: ExportStats,
+    pub message: String,
+}

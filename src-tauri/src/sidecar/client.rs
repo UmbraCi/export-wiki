@@ -131,6 +131,25 @@ impl SidecarClient {
         self.request("get_current_user", json!({ "auth": auth_payload(auth) }))
             .await
     }
+
+    pub async fn export_pages(
+        &self,
+        auth: &SidecarAuthConfig,
+        page_ids: &[String],
+        format: &str,
+        include_attachments: bool,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "export_pages",
+            json!({
+                "auth": auth_payload(auth),
+                "page_ids": page_ids,
+                "format": format,
+                "include_attachments": include_attachments,
+            }),
+        )
+        .await
+    }
 }
 
 /// Spawn `program`, write one stdin line (`request_json_line`), then read one stdout JSON line.

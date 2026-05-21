@@ -1,14 +1,7 @@
 import { create } from 'zustand'
-import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-
-export interface ExportStats {
-  total: number
-  exported: number
-  skipped: number
-  failed: number
-  attachments: number
-}
+import { api } from '../lib/api'
+import type { ExportOptions, ExportProgressEvent, ExportStats } from '../lib/contracts'
 
 export interface ExportLogEntry {
   timestamp: string
@@ -16,11 +9,21 @@ export interface ExportLogEntry {
   message: string
 }
 
-export interface ExportOptions {
-  format: 'markdown' | 'html'
-  includeAttachments: boolean
-  outputDir: string
-  skipUnchanged: boolean
+export type ExportPanelOptions = Pick<ExportOptions, 'outputDir' | 'includeAttachments'>
+
+function sanitizeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/token|cookie|password|secret/gi, '[redacted]')
+}
+
+function logLevelForStatus(status: ExportProgressEvent['status']): ExportLogEntry['level'] {
+  if (status === 'failed') {
+    return 'error'
+  }
+  if (status === 'complete') {
+    return 'info'
+  }
+  return 'info'
 }
 
 interface ExportState {
@@ -28,71 +31,96 @@ interface ExportState {
   progress: number
   stats: ExportStats
   logs: ExportLogEntry[]
-  options: ExportOptions
+  options: ExportPanelOptions
   error: string | null
 
-  setOptions: (options: ExportOptions) => void
-  startExport: () => Promise<void>
-  cancelExport: () => Promise<void>
-  addLog: (entry: ExportLogEntry) => void
-  updateProgress: (progress: number, stats: ExportStats) => void
+  setOptions: (options: Partial<ExportPanelOptions>) => void
+  startExport: (pageIds: string[]) => Promise<void>
   reset: () => void
+}
+
+const defaultStats: ExportStats = {
+  total: 0,
+  exported: 0,
+  skipped: 0,
+  failed: 0,
+  attachments: 0,
 }
 
 export const useExportStore = create<ExportState>((set, get) => ({
   isExporting: false,
   progress: 0,
-  stats: { total: 0, exported: 0, skipped: 0, failed: 0, attachments: 0 },
+  stats: defaultStats,
   logs: [],
   options: {
-    format: 'markdown',
     includeAttachments: true,
     outputDir: '',
-    skipUnchanged: false,
   },
   error: null,
 
-  setOptions: (options) => set({ options }),
+  setOptions: (options) =>
+    set((state) => ({
+      options: { ...state.options, ...options },
+    })),
 
-  startExport: async () => {
+  startExport: async (pageIds) => {
     const { options } = get()
-    set({ isExporting: true, progress: 0, error: null })
+    set({
+      isExporting: true,
+      progress: 0,
+      error: null,
+      stats: defaultStats,
+      logs: [],
+    })
+
+    const unlisten = await listen<ExportProgressEvent>('export-progress', (event) => {
+      const payload = event.payload
+      set((state) => ({
+        progress: payload.progress,
+        stats: payload.stats,
+        logs: [
+          ...state.logs,
+          {
+            timestamp: new Date().toLocaleTimeString(),
+            level: logLevelForStatus(payload.status),
+            message: payload.message,
+          },
+        ],
+      }))
+    })
 
     try {
-      // Listen for progress events from Tauri backend
-      const unlisten = await listen<{ progress: number; stats: ExportStats }>('export-progress', (event) => {
-        set({ progress: event.payload.progress, stats: event.payload.stats })
+      await api.exportPages({
+        pageIds,
+        outputDir: options.outputDir,
+        format: 'markdown',
+        includeAttachments: options.includeAttachments,
       })
-
-      await invoke('start_export', { options })
-
-      unlisten()
       set({ isExporting: false, progress: 100 })
     } catch (err) {
-      set({ error: String(err), isExporting: false })
+      set({
+        error: sanitizeError(err),
+        isExporting: false,
+        logs: [
+          ...get().logs,
+          {
+            timestamp: new Date().toLocaleTimeString(),
+            level: 'error',
+            message: sanitizeError(err),
+          },
+        ],
+      })
+    } finally {
+      unlisten()
     }
   },
 
-  cancelExport: async () => {
-    try {
-      await invoke('cancel_export')
-      set({ isExporting: false })
-    } catch (err) {
-      set({ error: String(err) })
-    }
-  },
-
-  addLog: (entry) => set((state) => ({
-    logs: [...state.logs, entry],
-  })),
-
-  updateProgress: (progress, stats) => set({ progress, stats }),
-
-  reset: () => set({
-    isExporting: false,
-    progress: 0,
-    stats: { total: 0, exported: 0, skipped: 0, failed: 0, attachments: 0 },
-    logs: [],
-    error: null,
-  }),
+  reset: () =>
+    set({
+      isExporting: false,
+      progress: 0,
+      stats: defaultStats,
+      logs: [],
+      error: null,
+    }),
 }))

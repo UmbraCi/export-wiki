@@ -13,10 +13,8 @@ function SettingsPanel() {
   useEffect(() => {
     if (config) {
       setOptions({
-        format: config.defaultFormat,
         includeAttachments: config.includeAttachmentsDefault,
         outputDir: config.defaultOutputDir,
-        skipUnchanged: config.skipUnchangedDefault,
       })
     }
   }, [config, setOptions])
