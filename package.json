@@ -12,7 +12,9 @@
     "build:frontend": "vite build",
     "preview": "vite preview",
     "test:sidecar": "cd sidecar && uv run pytest",
-    "build:sidecar": "cd sidecar && python -m PyInstaller --onefile --name cme-sidecar confluence_export_sidecar/__main__.py"
+    "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar confluence_export_sidecar/__main__.py",
+    "prepare:sidecar": "npm run build:sidecar && node scripts/prepare-sidecar.mjs",
+    "build:mvp": "npm run prepare:sidecar && npm run build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
