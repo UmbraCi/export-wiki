@@ -86,3 +86,23 @@ pub struct ExportProgressEvent {
     pub stats: ExportStats,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncSettings {
+    pub enabled: bool,
+    pub interval_minutes: u32,
+    pub output_dir: String,
+    pub page_ids: Vec<String>,
+}
+
+impl Default for SyncSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_minutes: 60,
+            output_dir: String::new(),
+            page_ids: vec![],
+        }
+    }
+}

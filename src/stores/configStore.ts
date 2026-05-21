@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
+import { defaultSyncSettings, type SyncSettings } from '../lib/contracts'
 
 export interface Config {
   defaultOutputDir: string
@@ -7,6 +8,15 @@ export interface Config {
   includeAttachmentsDefault: boolean
   skipUnchangedDefault: boolean
   lastUsedUrl?: string
+  sync: SyncSettings
+}
+
+export const defaultConfig: Config = {
+  defaultOutputDir: '',
+  defaultFormat: 'markdown',
+  includeAttachmentsDefault: true,
+  skipUnchangedDefault: false,
+  sync: defaultSyncSettings,
 }
 
 interface ConfigState {
@@ -17,6 +27,7 @@ interface ConfigState {
   loadConfig: () => Promise<void>
   saveConfig: (config: Config) => Promise<void>
   updateConfig: (updates: Partial<Config>) => void
+  updateSyncSettings: (updates: Partial<SyncSettings>) => void
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -27,7 +38,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   loadConfig: async () => {
     set({ isLoading: true, error: null })
     try {
-      const config = await invoke<Config | null>('load_config')
+      const loaded = await invoke<Config | null>('load_config')
+      const config: Config = loaded
+        ? { ...defaultConfig, ...loaded, sync: { ...defaultSyncSettings, ...loaded.sync } }
+        : defaultConfig
       set({ config, isLoading: false })
     } catch (err) {
       set({ error: String(err), isLoading: false })
@@ -48,6 +62,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const { config } = get()
     if (config) {
       set({ config: { ...config, ...updates } })
+    }
+  },
+
+  updateSyncSettings: (updates) => {
+    const { config } = get()
+    if (config) {
+      set({ config: { ...config, sync: { ...config.sync, ...updates } } })
     }
   },
 }))

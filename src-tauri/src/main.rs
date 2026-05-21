@@ -6,6 +6,7 @@ mod commands;
 mod export;
 mod sidecar;
 mod state;
+mod sync;
 
 use state::AppState;
 
@@ -23,6 +24,8 @@ fn main() {
             commands::spaces::search_pages,
             commands::spaces::parse_confluence_url_command,
             commands::export::export_pages,
+            commands::config::load_config,
+            commands::config::save_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,19 +1,32 @@
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub auth: Option<AuthConfigData>,
-    pub export_path: Option<String>,
-}
+use crate::contracts::SyncSettings;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AuthConfigData {
-    pub base_url: String,
-    pub username: String,
+#[serde(rename_all = "camelCase")]
+pub struct Config {
+    #[serde(default)]
+    pub default_output_dir: String,
+    #[serde(default = "default_format")]
+    pub default_format: String,
+    #[serde(default = "default_true")]
+    pub include_attachments_default: bool,
+    #[serde(default)]
+    pub skip_unchanged_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_used_url: Option<String>,
+    #[serde(default)]
+    pub sync: SyncSettings,
+}
+
+fn default_format() -> String {
+    "markdown".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize)]

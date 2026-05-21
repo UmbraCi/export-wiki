@@ -64,3 +64,17 @@ export interface ExportProgressEvent {
   stats: ExportStats
   message: string
 }
+
+export interface SyncSettings {
+  enabled: boolean
+  intervalMinutes: number
+  outputDir: string
+  pageIds: string[]
+}
+
+export const defaultSyncSettings: SyncSettings = {
+  enabled: false,
+  intervalMinutes: 60,
+  outputDir: '',
+  pageIds: [],
+}
