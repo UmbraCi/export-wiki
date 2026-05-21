@@ -1,5 +1,8 @@
 node_modules/
 sidecar/.venv/
+sidecar/**/*.pyc
+sidecar/**/__pycache__/
+**/*.egg-info/
 
 dist/
 release/
