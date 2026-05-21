@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Tauri app for exporting Confluence Wiki content",
+  "license": "MIT",
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "start": "tauri dev --features dev-connector",
