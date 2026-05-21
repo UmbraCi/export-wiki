@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "confluence-export-sidecar"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "confluence-markdown-exporter==5.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pyinstaller>=6",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

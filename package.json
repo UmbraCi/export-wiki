@@ -10,7 +10,9 @@
     "test:watch": "vitest",
     "build": "tauri build",
     "build:frontend": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:sidecar": "cd sidecar && uv run pytest",
+    "build:sidecar": "cd sidecar && python -m PyInstaller --onefile --name cme-sidecar confluence_export_sidecar/__main__.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
