@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 interface InputProps {
   label?: string
   placeholder?: string
@@ -6,6 +8,7 @@ interface InputProps {
   onChange?: (value: string) => void
   error?: string
   disabled?: boolean
+  suffix?: ReactNode
 }
 
 function Input({
@@ -16,6 +19,7 @@ function Input({
   onChange,
   error,
   disabled = false,
+  suffix,
 }: InputProps) {
   return (
     <div className="space-y-2">
@@ -24,18 +28,27 @@ function Input({
           {label}
         </label>
       )}
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        disabled={disabled}
-        className={`w-full px-4 py-3 rounded-xl text-sm text-text-primary bg-bg-card border transition-all duration-200 input-app ${
-          error
-            ? 'border-error'
-            : 'border-border hover:border-text-muted'
-        } ${disabled ? 'bg-bg-secondary cursor-not-allowed text-text-muted' : ''}`}
-      />
+      <div className="relative">
+        <input
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange?.(e.target.value)}
+          disabled={disabled}
+          className={`w-full px-4 py-3 rounded-xl text-sm text-text-primary bg-bg-card border transition-all duration-200 input-app ${
+            suffix ? 'pr-12' : ''
+          } ${
+            error
+              ? 'border-error'
+              : 'border-border hover:border-text-muted'
+          } ${disabled ? 'bg-bg-secondary cursor-not-allowed text-text-muted' : ''}`}
+        />
+        {suffix && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            {suffix}
+          </div>
+        )}
+      </div>
       {error && (
         <p className="text-sm text-error">{error}</p>
       )}

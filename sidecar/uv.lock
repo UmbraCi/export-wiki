@@ -211,7 +211,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "confluence-markdown-exporter", specifier = "==5.1.1" },
+    { name = "confluence-markdown-exporter", git = "https://github.com/UmbraCi/confluence-markdown-exporter.git?rev=feat%2Ftable-column-width-mixed" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
@@ -219,8 +219,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "confluence-markdown-exporter"
-version = "5.1.1"
-source = { registry = "https://pypi.org/simple" }
+version = "5.2.0"
+source = { git = "https://github.com/UmbraCi/confluence-markdown-exporter.git?rev=feat%2Ftable-column-width-mixed#a8938aac2c947bc2ac0b557bc9e461c03235dd1f" }
 dependencies = [
     { name = "atlassian-python-api" },
     { name = "jmespath" },
@@ -233,10 +233,6 @@ dependencies = [
     { name = "rich" },
     { name = "tabulate" },
     { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ed/a0/47c034a0700d90a16d1adba7accac4b502d2bf4b502400005d03636955b7/confluence_markdown_exporter-5.1.1.tar.gz", hash = "sha256:c02e7e9142ddb3a85b55af04c04295f6a76271f0b9af076c9c3c2ac28414d720", size = 497050, upload-time = "2026-05-15T09:29:12.69Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/4f/5d43b805eba884c21aadab42080172b45e4ce99cb6f3e9838fc814781473/confluence_markdown_exporter-5.1.1-py3-none-any.whl", hash = "sha256:9cdb2d41483540b410b5ab73b4ffbc2bdc3f34822e38472253137d031e332b45", size = 76444, upload-time = "2026-05-15T09:29:13.776Z" },
 ]
 
 [[package]]

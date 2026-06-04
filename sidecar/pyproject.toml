@@ -7,7 +7,7 @@ name = "confluence-export-sidecar"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-  "confluence-markdown-exporter==5.2.0",
+  "confluence-markdown-exporter @ git+https://github.com/UmbraCi/confluence-markdown-exporter.git@feat/table-column-width-mixed",
 ]
 
 [project.optional-dependencies]

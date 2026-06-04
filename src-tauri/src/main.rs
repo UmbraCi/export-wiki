@@ -18,7 +18,9 @@ const DEV_CONNECTOR_CAPABILITY: &str =
     include_str!("../capabilities-dev/dev-connector.json");
 
 fn main() {
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_shell::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init());
 
     #[cfg(feature = "dev-connector")]
     {

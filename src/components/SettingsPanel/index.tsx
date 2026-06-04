@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useConfigStore } from '../../stores/configStore'
 import { useExportStore } from '../../stores/exportStore'
 import { useSelectionStore } from '../../stores/selectionStore'
@@ -104,6 +105,21 @@ function SettingsPanel() {
             placeholder={t('export:fields.outputDirPlaceholder')}
             value={config.defaultOutputDir}
             onChange={(val) => saveConfig({ ...config, defaultOutputDir: val })}
+            suffix={
+              <button
+                type="button"
+                onClick={async () => {
+                  const selected = await open({ directory: true })
+                  if (selected) saveConfig({ ...config, defaultOutputDir: selected })
+                }}
+                className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                title={t('export:fields.pickDir')}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </button>
+            }
           />
 
           <Select
@@ -175,6 +191,21 @@ function SettingsPanel() {
                 placeholder={config.defaultOutputDir || t('export:fields.outputDirPlaceholder')}
                 value={sync.outputDir}
                 onChange={(val) => updateSyncSettings({ outputDir: val })}
+                suffix={
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const selected = await open({ directory: true })
+                      if (selected) updateSyncSettings({ outputDir: selected })
+                    }}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                    title={t('export:fields.pickDir')}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                  </button>
+                }
               />
             </div>
 

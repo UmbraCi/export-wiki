@@ -7,7 +7,10 @@ import sys
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
+from confluence_export_sidecar.log import get_logger
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
+
+log = get_logger(__name__)
 
 
 def _error_response(request_id: str, message: str) -> dict:
@@ -86,6 +89,7 @@ def _dispatch(req: dict) -> dict:
 
 
 def main() -> None:
+    log.info("sidecar started")
     for raw in sys.stdin:
         stripped = raw.strip()
         if not stripped:
@@ -94,11 +98,16 @@ def main() -> None:
         try:
             req = parse_request(stripped)
             req_id = str(req["request_id"])
+            log.debug("request id=%s type=%s", req_id, req.get("type"))
             resp = _dispatch(req)
         except ProtocolError as exc:
+            log.warning("protocol error id=%s: %s", req_id, exc)
             resp = _error_response(req_id or "", str(exc))
+        if not resp.get("ok"):
+            log.error("error response id=%s: %s", req_id, resp.get("error"))
         sys.stdout.write(json.dumps(resp, separators=(",", ":")) + "\n")
         sys.stdout.flush()
+    log.info("sidecar exiting")
 
 
 if __name__ == "__main__":

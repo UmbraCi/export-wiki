@@ -5,7 +5,8 @@
   },
   "fields": {
     "outputDir": "Output Directory",
-    "outputDirPlaceholder": "~/Documents/confluence-export"
+    "outputDirPlaceholder": "~/Documents/confluence-export",
+    "pickDir": "Choose folder…"
   },
   "attachments": {
     "label": "Include Attachments",

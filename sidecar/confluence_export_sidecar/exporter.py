@@ -19,6 +19,9 @@ from confluence_markdown_exporter.utils.app_data_store import (
 from pydantic import SecretStr
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
+from confluence_export_sidecar.log import get_logger
+
+log = get_logger(__name__)
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _WINDOWS_RESERVED = {
@@ -119,8 +122,10 @@ def _download_attachment_content(attachment: Any, base_url: str) -> bytes | None
             advanced_mode=True,
         )
         response.raise_for_status()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        log.warning("attachment download failed: %s — %s", attachment.filename, exc)
         return None
+    log.debug("downloaded attachment: %s (%d bytes)", attachment.filename, len(response.content))
     return response.content
 
 
@@ -161,20 +166,32 @@ def export_page(
     export_format: str = "markdown",
 ) -> dict[str, Any]:
     """Export one Confluence page to Markdown or HTML and attachment manifests."""
+    log.info("exporting page_id=%s format=%s attachments=%s", page_id, export_format, include_attachments)
     base_url = _configure_cme(auth, include_attachments)
     page = Page.from_id(int(page_id), base_url)
     if page.title == "Page not accessible":
         raise ValueError(f"Page {page_id} is not accessible")
 
     content = page.html if export_format == "html" else page.markdown
+    log.info("page title=%r content_len=%d", page.title, len(content))
     raw_attachments: list[dict[str, Any]] = []
     if include_attachments:
-        for attachment in page._attachments_for_export():  # noqa: SLF001
+        attachments_list = list(page._attachments_for_export())  # noqa: SLF001
+        log.info("found %d attachment(s) for page %s", len(attachments_list), page_id)
+        for attachment in attachments_list:
             attachment_content = _download_attachment_content(attachment, base_url)
             if attachment_content is None:
                 continue
-            filename = sanitize_filename(attachment.filename)
+            # Confluence DC/Server doesn't populate fileId, so filename
+            # may be just an extension (e.g. ".png").  Fall back to id.
+            raw_name = attachment.filename
+            if raw_name.startswith(".") or not Path(raw_name).stem:
+                raw_name = f"{attachment.id}{attachment.extension}"
+                log.debug("filename fallback: id=%s title=%r -> %s", attachment.id, attachment.title, raw_name)
+            filename = sanitize_filename(raw_name)
+            log.debug("attachment resolved: %r -> %s (%d bytes)", attachment.title, filename, len(attachment_content))
             raw_attachments.append({"filename": filename, "content": attachment_content})
+        log.info("exported %d/%d attachment(s) for page %s", len(raw_attachments), len(attachments_list), page_id)
 
     return build_exported_page(
         page_id=str(page_id),

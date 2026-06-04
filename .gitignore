@@ -13,6 +13,7 @@ sidecar/cme-sidecar.spec
 src-tauri/binaries/cme-sidecar-*
 .DS_Store
 *.log
+logs/
 .env
 .env.local
 .superpowers/
