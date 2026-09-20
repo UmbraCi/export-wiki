@@ -73,6 +73,7 @@ pub struct ConfluenceUrlTarget {
 pub enum ExportFormat {
     Markdown,
     Html,
+    MigrationPackage,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

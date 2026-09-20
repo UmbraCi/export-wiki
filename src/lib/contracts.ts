@@ -53,7 +53,7 @@ export interface ConfluenceUrlTarget {
   spaceKey: string | null
 }
 
-export type ExportFormat = 'markdown' | 'html'
+export type ExportFormat = 'markdown' | 'html' | 'migration_package'
 
 export interface ExportOptions {
   pageIds: string[]

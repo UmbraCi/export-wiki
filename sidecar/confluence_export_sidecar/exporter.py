@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
 from confluence_export_sidecar.log import get_logger
+from confluence_export_sidecar.migration_package import publish_single_page_package
 
 log = get_logger(__name__)
 
@@ -213,3 +214,29 @@ def export_pages(
         export_page(page_id, auth, include_attachments, export_format)
         for page_id in page_ids
     ]
+
+
+def export_single_page_migration_package(
+    *, page_id: str, auth: dict[str, Any], output_dir: str,
+) -> str:
+    """Fetch and convert one page, then publish its migration ZIP."""
+    base_url = _configure_cme(auth, include_attachments=False)
+    page = Page.from_id(int(page_id), base_url)
+    if page.title == "Page not accessible":
+        raise ValueError(f"Page {page_id} is not accessible")
+
+    return str(
+        publish_single_page_package(
+            output_dir=output_dir,
+            page={
+                "id": str(page.id),
+                "title": page.title,
+                "source_path": [*(ancestor.title for ancestor in page.ancestors), page.title],
+                "source_url": page.web_url or f"{base_url}/pages/{page.id}",
+                "version": page.version.number,
+                "storage": page.body_storage,
+                "html": page.html,
+                "markdown": page.markdown,
+            },
+        )
+    )

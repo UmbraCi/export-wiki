@@ -4,6 +4,7 @@
   "INVALID_HTTPS_URL": "Confluence URL must start with https://",
   "EMPTY_SELECTION": "Select at least one page to export",
   "OUTPUT_DIR_REQUIRED": "Select an output directory",
+  "MIGRATION_PACKAGE_REQUIRES_ONE_PAGE": "A migration package requires exactly one selected page",
   "API_TOKEN_REQUIRED": "API token authentication requires username and API token",
   "COOKIE_REQUIRED": "Cookie authentication requires a cookie value",
   "COOKIE_VALIDATION_FAILED": "Cookie validation failed: {{detail}}. Copy all wiki cookies (include seraph.confluence), not only JSESSIONID.",

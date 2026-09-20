@@ -115,6 +115,7 @@ pub async fn export_pages(
     let format = match options.format {
         ExportFormat::Markdown => "markdown",
         ExportFormat::Html => "html",
+        ExportFormat::MigrationPackage => "migration_package",
     };
 
     if options.output_dir.trim().is_empty() {
@@ -134,6 +135,43 @@ pub async fn export_pages(
         failed: 0,
         attachments: 0,
     };
+
+    if options.format == ExportFormat::MigrationPackage {
+        if options.page_ids.len() != 1 {
+            return Err(AppError::new(codes::MIGRATION_PACKAGE_REQUIRES_ONE_PAGE).into_invoke_error());
+        }
+
+        emit_progress(
+            &app,
+            ExportProgressEvent {
+                page_id: Some(options.page_ids[0].clone()),
+                status: "writing".into(),
+                progress: 0,
+                stats: stats.clone(),
+                message_key: Some("export.writing".into()),
+                message_params: Some(json!({ "filename": "migration package" })),
+                message: None,
+            },
+        )?;
+        client
+            .export_migration_package(&auth, &options.page_ids[0], &options.output_dir)
+            .await
+            .map_err(|error| redact_secrets(&error))?;
+        stats.exported = 1;
+        emit_progress(
+            &app,
+            ExportProgressEvent {
+                page_id: None,
+                status: "complete".into(),
+                progress: 100,
+                stats,
+                message_key: Some("export.complete".into()),
+                message_params: Some(json!({ "exported": 1, "failed": 0, "attachments": 0 })),
+                message: None,
+            },
+        )?;
+        return Ok(ExportPagesAck { export_id });
+    }
 
     emit_progress(
         &app,

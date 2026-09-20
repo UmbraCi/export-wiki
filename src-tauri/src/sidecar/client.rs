@@ -150,6 +150,23 @@ impl SidecarClient {
         )
         .await
     }
+
+    pub async fn export_migration_package(
+        &self,
+        auth: &SidecarAuthConfig,
+        page_id: &str,
+        output_dir: &str,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "export_migration_package",
+            json!({
+                "auth": auth_payload(auth),
+                "page_id": page_id,
+                "output_dir": output_dir,
+            }),
+        )
+        .await
+    }
 }
 
 /// Spawn `program`, write one stdin line (`request_json_line`), then read one stdout JSON line.

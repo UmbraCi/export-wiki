@@ -7,6 +7,7 @@ import sys
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
+from confluence_export_sidecar.exporter import export_single_page_migration_package
 from confluence_export_sidecar.log import get_logger
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
@@ -82,6 +83,24 @@ def _dispatch(req: dict) -> dict:
                 export_format,
             )
             return success_response(request_id, {"pages": pages})
+        except Exception as exc:  # noqa: BLE001
+            return _error_response(request_id, str(exc))
+
+    if req_type == "export_migration_package":
+        auth = payload.get("auth")
+        page_id = payload.get("page_id")
+        output_dir = payload.get("output_dir")
+        if not auth:
+            return _error_response(request_id, "auth payload is required")
+        if not page_id:
+            return _error_response(request_id, "page_id is required")
+        if not output_dir:
+            return _error_response(request_id, "output_dir is required")
+        try:
+            package_path = export_single_page_migration_package(
+                page_id=str(page_id), auth=auth, output_dir=str(output_dir),
+            )
+            return success_response(request_id, {"package_path": package_path})
         except Exception as exc:  # noqa: BLE001
             return _error_response(request_id, str(exc))
 

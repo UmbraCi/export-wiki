@@ -15,7 +15,8 @@
   "format": {
     "label": "导出格式",
     "markdown": "Markdown (.md)",
-    "html": "HTML (.html)"
+    "html": "HTML (.html)",
+    "migration_package": "Outline 迁移包 (.zip)"
   },
   "button": {
     "export_one": "导出 {{count}} 个页面",

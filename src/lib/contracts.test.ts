@@ -24,6 +24,17 @@ describe('shared frontend contracts', () => {
     expect(options.format).toBe('html')
   })
 
+  it('allows the single-page migration package format', () => {
+    const options: ExportOptions = {
+      pageIds: ['123'],
+      outputDir: '/tmp/export-wiki',
+      format: 'migration_package',
+      includeAttachments: false,
+    }
+
+    expect(options.format).toBe('migration_package')
+  })
+
   it('represents progress without exposing credentials', () => {
     const event: ExportProgressEvent = {
       pageId: '123',

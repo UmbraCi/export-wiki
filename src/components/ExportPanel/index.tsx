@@ -11,7 +11,10 @@ function ExportPanel() {
   const { selectedPageIds } = useSelectionStore()
 
   const canExport =
-    selectedPageIds.length > 0 && options.outputDir.trim().length > 0 && !isExporting
+    selectedPageIds.length > 0 &&
+    options.outputDir.trim().length > 0 &&
+    !(options.format === 'migration_package' && selectedPageIds.length !== 1) &&
+    !isExporting
 
   return (
     <div className="card-app mt-6 animate-fade-in stagger-5">
@@ -45,7 +48,7 @@ function ExportPanel() {
           }
         />
 
-        <label className="flex items-start gap-4 cursor-pointer">
+        {options.format !== 'migration_package' && <label className="flex items-start gap-4 cursor-pointer">
           <button
             type="button"
             onClick={() => setOptions({ includeAttachments: !options.includeAttachments })}
@@ -65,7 +68,7 @@ function ExportPanel() {
               {t('export:attachments.description')}
             </span>
           </div>
-        </label>
+        </label>}
 
         <div className="space-y-2">
           <span className="text-sm font-medium text-text-primary">{t('export:format.label')}</span>
@@ -73,6 +76,7 @@ function ExportPanel() {
             {([
               { value: 'markdown' as const, label: t('export:format.markdown') },
               { value: 'html' as const, label: t('export:format.html') },
+              { value: 'migration_package' as const, label: t('export:format.migration_package') },
             ]).map((formatOption) => {
               const selected = options.format === formatOption.value
               return (
