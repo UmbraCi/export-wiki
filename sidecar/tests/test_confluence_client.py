@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from threading import Barrier, Lock, get_ident
 
 import pytest
 
@@ -85,8 +86,81 @@ def test_fetch_page_descendants_uses_paged_cql():
         {"results": [{"content": {"id": "3", "title": "Grandchild"}}], "totalSize": 2},
     ]
 
-    pages = client.fetch_page_descendants("1")
+    with patch.object(client, "_build_client", return_value=client._client):
+        pages = client.fetch_page_descendants("1")
 
     assert [page["id"] for page in pages] == ["2", "3"]
-    assert client._client.cql.call_args_list[0].kwargs == {"start": 0, "limit": 250}
-    assert client._client.cql.call_args_list[1].kwargs == {"start": 1, "limit": 250}
+    assert client._client.cql.call_args_list[0].kwargs == {"start": 0, "limit": 250, "excerpt": "none"}
+
+
+def test_descendants_fetches_remaining_pages_with_four_workers():
+    client = ConfluenceClient({"base_url": "https://wiki.example.com", "method": "sso", "cookie": "session=fixture"})
+    barrier = Barrier(4, timeout=2)
+    lock = Lock()
+    calls = []
+    workers = []
+
+    def worker():
+        sdk = MagicMock()
+
+        def fetch(cql, *, start, limit, excerpt=None):
+            with lock:
+                calls.append((start, get_ident(), id(sdk)))
+            if start:
+                barrier.wait()
+            return {"results": [{"content": {"id": str(i), "title": f"Page {i}"}} for i in range(start + 2, start + 4)], "totalSize": 10}
+
+        sdk.cql.side_effect = fetch
+        workers.append(sdk)
+        return sdk
+
+    client._client = worker()
+    with patch.object(client, "_build_client", side_effect=worker):
+        pages = client.fetch_page_descendants("1")
+
+    assert [page["id"] for page in pages] == [str(i) for i in range(2, 12)]
+    assert sorted(start for start, _, _ in calls) == [0, 2, 4, 6, 8]
+    assert len({thread for start, thread, _ in calls if start}) == 4
+    assert len({sdk for start, _, sdk in calls if start}) == 4
+    for sdk in workers[1:]:
+        sdk.close.assert_called_once()
+
+
+def test_descendants_cache_expires_without_returning_partial_results():
+    client = ConfluenceClient({"base_url": "https://wiki.example.com", "method": "sso", "cookie": "session=fixture"})
+    client._client = MagicMock()
+    client._client.cql.return_value = {"results": [{"content": {"id": "2", "title": "Child"}}], "totalSize": 1}
+    with patch("confluence_export_sidecar.confluence_client.monotonic", return_value=0):
+        first = client.fetch_page_descendants("1")
+        assert client.fetch_page_descendants("1") == first
+    assert client._client.cql.call_count == 1
+
+    with patch("confluence_export_sidecar.confluence_client.monotonic", return_value=301):
+        client.fetch_page_descendants("1")
+    assert client._client.cql.call_count == 2
+
+
+def test_descendants_rejects_incomplete_pagination_and_does_not_cache_it():
+    client = ConfluenceClient({"base_url": "https://wiki.example.com", "method": "sso", "cookie": "session=fixture"})
+    client._client = MagicMock()
+    client._client.cql.side_effect = [
+        {"results": [{"content": {"id": "2"}}], "totalSize": 2},
+        {"results": [{"content": {"id": "2"}}], "totalSize": 2},
+    ]
+    with patch.object(client, "_build_client", return_value=client._client):
+        with pytest.raises(ValueError, match="incomplete"):
+            client.fetch_page_descendants("1")
+
+    client._client.cql.side_effect = None
+    client._client.cql.return_value = {"results": [], "totalSize": 0}
+    assert client.fetch_page_descendants("1") == []
+
+
+def test_descendants_keeps_sequential_pagination_when_total_is_unknown():
+    client = ConfluenceClient({"base_url": "https://wiki.example.com", "method": "sso", "cookie": "session=fixture"})
+    client._client = MagicMock()
+    client._client.cql.side_effect = [
+        {"results": [{"content": {"id": "2"}}], "_links": {"next": "next-page"}},
+        {"results": [{"content": {"id": "3"}}]},
+    ]
+    assert [page["id"] for page in client.fetch_page_descendants("1")] == ["2", "3"]

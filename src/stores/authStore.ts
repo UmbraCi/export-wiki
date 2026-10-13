@@ -119,6 +119,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         status,
         baseUrl: status.baseUrl ?? get().baseUrl,
+        error: status.validationError ? clientError(status.validationError) : null,
         isLoading: false,
       })
     } catch (error) {
@@ -197,6 +198,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ssoSession: null,
         ssoStatus: inactiveSsoStatus,
         isLoading: false,
+        error: status.validationError ? clientError(status.validationError) : null,
       })
     } catch (error) {
       set({ error: sanitizeError(error), isLoading: false })
@@ -273,6 +275,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ssoSession: null,
         ssoStatus: inactiveSsoStatus,
         isLoading: false,
+        error: status.validationError ? clientError(status.validationError) : null,
       })
     } catch (error) {
       set({ error: sanitizeError(error), isLoading: false })
@@ -289,9 +292,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
 
     try {
-      if (get().status.authenticated) {
-        await api.logout()
-      }
       set({
         status: unauthenticatedStatus,
         baseUrl: preservedBaseUrl,
@@ -356,6 +356,10 @@ let ssoListenersInitialized = false
 export function initSsoEventListeners() {
   if (ssoListenersInitialized) return
   ssoListenersInitialized = true
+
+  void listen('auth-required', () => {
+    void useAuthStore.getState().loadStatus()
+  })
 
   void listen<AuthStatus>('sso-auto-completed', (event) => {
     useAuthStore.setState({

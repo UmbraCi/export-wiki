@@ -1,19 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../lib/contracts'
 import { isInvalidConfluenceUrlError } from '../../i18n/backend'
 import { useSelectionStore } from '../../stores/selectionStore'
+import { useNavStore } from '../../stores/navStore'
 import { Checkbox } from '@/components/ui/checkbox'
 import Input from '../common/Input'
 import Button from '../common/Button'
 
 function SpaceBrowser() {
   const { t } = useTranslation(['spaces', 'common'])
+  const setActiveView = useNavStore((state) => state.setActiveView)
   const {
     spaces,
     pageTrees,
     activeSpaceKey,
     selectedPageIds,
+    selectedSubtreePageIds,
     searchQuery,
     searchResults,
     urlInput,
@@ -38,6 +41,7 @@ function SpaceBrowser() {
   const [localUrl, setLocalUrl] = useState(urlInput)
   const [spaceSearch, setSpaceSearch] = useState('')
   const [expandedPageIds, setExpandedPageIds] = useState<string[]>([])
+  const selectedIds = useMemo(() => new Set(selectedPageIds), [selectedPageIds])
 
   useEffect(() => {
     void fetchSpaces()
@@ -184,7 +188,7 @@ function SpaceBrowser() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Panel
           title={t('spaces:spaces.title')}
           subtitle={
@@ -248,8 +252,9 @@ function SpaceBrowser() {
               key={page.id}
               node={page}
               depth={0}
-              selectedPageIds={selectedPageIds}
-              onToggle={(pageId, title) => void togglePageSubtreeSelection(pageId, title)}
+              selectedPageIds={selectedIds}
+              subtreePageIds={selectedSubtreePageIds}
+              onToggle={(pageId, title, checked) => void togglePageSubtreeSelection(pageId, title, checked)}
               expanded={expandedPageIds.includes(page.id)}
               onExpand={togglePageExpanded}
               isLoading={loadingPageIds.includes(page.id)}
@@ -259,6 +264,17 @@ function SpaceBrowser() {
           ))}
         </Panel>
       </div>
+      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-4 border-t border-border bg-bg-secondary py-4">
+        <p className="text-sm text-text-secondary" role="status">
+          {t('spaces:selected.count', { count: selectedPageIds.length })}
+        </p>
+        <Button
+          onClick={() => setActiveView('export')}
+          disabled={selectedPageIds.length === 0 || loadingPageIds.length > 0}
+        >
+          {t('common:buttons.next')}
+        </Button>
+      </div>
     </div>
   )
 }
@@ -267,6 +283,7 @@ function PageTreeNode({
   node,
   depth,
   selectedPageIds,
+  subtreePageIds,
   onToggle,
   expanded,
   onExpand,
@@ -276,8 +293,9 @@ function PageTreeNode({
 }: {
   node: PageNode
   depth: number
-  selectedPageIds: string[]
-  onToggle: (pageId: string, title: string) => void
+  selectedPageIds: Set<string>
+  subtreePageIds: Record<string, string[]>
+  onToggle: (pageId: string, title: string, checked: boolean) => void
   expanded: boolean
   onExpand: (pageId: string) => void
   isLoading: boolean
@@ -285,9 +303,11 @@ function PageTreeNode({
   loadingPageIds: string[]
 }) {
   const { t } = useTranslation('spaces')
-  const selected = selectedPageIds.includes(node.id)
-  const hasSelectedDescendant = hasSelectedDescendantOf(node, selectedPageIds)
-  const checkboxState = selected ? true : hasSelectedDescendant ? 'indeterminate' : false
+  const selected = selectedPageIds.has(node.id)
+  const subtreeIds = getSubtreePageIds(node, subtreePageIds)
+  const checkboxState = subtreeIds.every((id) => selectedPageIds.has(id))
+    ? true
+    : subtreeIds.some((id) => selectedPageIds.has(id)) ? 'indeterminate' : false
 
   return (
     <div>
@@ -313,7 +333,8 @@ function PageTreeNode({
         )}
         <Checkbox
           checked={checkboxState}
-          onCheckedChange={() => onToggle(node.id, node.title)}
+          onCheckedChange={(checked) => onToggle(node.id, node.title, checked === true)}
+          disabled={isLoading}
           aria-label={t('pages.selectAria', { title: node.title })}
         />
 
@@ -329,6 +350,7 @@ function PageTreeNode({
           node={child}
           depth={depth + 1}
           selectedPageIds={selectedPageIds}
+          subtreePageIds={subtreePageIds}
           onToggle={onToggle}
           expanded={expandedPageIds.includes(child.id)}
           onExpand={onExpand}
@@ -341,10 +363,8 @@ function PageTreeNode({
   )
 }
 
-function hasSelectedDescendantOf(node: PageNode, selectedPageIds: string[]): boolean {
-  return node.children.some(
-    (child) => selectedPageIds.includes(child.id) || hasSelectedDescendantOf(child, selectedPageIds),
-  )
+function getSubtreePageIds(node: PageNode, subtreePageIds: Record<string, string[]>): string[] {
+  return subtreePageIds[node.id] ?? [node.id, ...node.children.flatMap((child) => getSubtreePageIds(child, subtreePageIds))]
 }
 
 function Panel({

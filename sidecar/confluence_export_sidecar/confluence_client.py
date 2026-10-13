@@ -5,6 +5,9 @@ from __future__ import annotations
 import html
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock, local
+from time import monotonic
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,6 +15,10 @@ import requests
 from atlassian import Confluence
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+class AuthenticationRequired(ValueError):
+    """The server explicitly rejected the session or returned an anonymous user."""
 
 
 def _auth_diag(message: str) -> None:
@@ -119,6 +126,11 @@ class ConfluenceClient:
             f"cookie_names={_cookie_names(cookie)!r} cookie_length={len(cookie)}"
         )
         self._client = self._build_client()
+        self._descendant_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+    def close(self) -> None:
+        self._client.close()
+        self._descendant_cache.clear()
 
     def _build_client(self) -> Confluence:
         raw_base_url = str(self._auth.get("base_url", "")).rstrip("/")
@@ -200,23 +212,52 @@ class ConfluenceClient:
         if not page_id.isdecimal():
             raise ValueError("page_id must be numeric")
 
-        cql = f"ancestor = {page_id} AND type = page"
-        descendants: list[dict[str, Any]] = []
-        start = 0
+        cached = self._descendant_cache.get(page_id)
+        if cached and monotonic() - cached[0] < 300:
+            return cached[1]
 
-        while True:
-            response = self._client.cql(cql, start=start, limit=250)
-            batch = response.get("results", [])
-            descendants.extend(batch)
-            next_start = start + len(batch)
-            total_size = response.get("totalSize")
-            if not batch or (total_size is not None and next_start >= int(total_size)):
-                break
-            if total_size is None and not response.get("_links", {}).get("next"):
-                break
-            start = next_start
+        cql = f"ancestor = {page_id} AND type = page ORDER BY created ASC, title ASC"
+        response = self._client.cql(cql, start=0, limit=250, excerpt="none")
+        descendants = list(response.get("results", []))
+        total_size = response.get("totalSize")
 
-        return normalize_page_tree(
+        if total_size is not None:
+            total_size = int(total_size)
+            page_size = len(descendants)
+            if not page_size and total_size:
+                raise ValueError("Subtree pagination is incomplete; retry the selection")
+            if page_size and page_size < total_size:
+                # Use the actual batch size because the server may cap the requested limit.
+                offsets = range(page_size, total_size, page_size)
+                thread_client = local()
+                clients: list[Confluence] = []
+                clients_lock = Lock()
+
+                def init_worker() -> None:
+                    thread_client.sdk = self._build_client()
+                    with clients_lock:
+                        clients.append(thread_client.sdk)
+
+                def fetch_batch(start: int) -> dict[str, Any]:
+                    return thread_client.sdk.cql(cql, start=start, limit=page_size, excerpt="none")
+
+                try:
+                    with ThreadPoolExecutor(max_workers=min(4, len(offsets)), initializer=init_worker) as executor:
+                        for batch_response in executor.map(fetch_batch, offsets):
+                            if int(batch_response.get("totalSize", total_size)) != total_size:
+                                raise ValueError("Subtree pagination is incomplete; retry the selection")
+                            descendants.extend(batch_response.get("results", []))
+                finally:
+                    for sdk in clients:
+                        sdk.close()
+        else:
+            while response.get("_links", {}).get("next"):
+                if not response.get("results"):
+                    raise ValueError("Subtree pagination is incomplete; retry the selection")
+                response = self._client.cql(cql, start=len(descendants), limit=250, excerpt="none")
+                descendants.extend(response.get("results", []))
+
+        pages = normalize_page_tree(
             [
                 {
                     "id": str(content["id"]),
@@ -231,6 +272,13 @@ class ConfluenceClient:
                 if content.get("id") is not None
             ]
         )
+        pages = list({page["id"]: page for page in pages}.values())
+        if total_size is not None and len(pages) != total_size:
+            raise ValueError("Subtree pagination is incomplete; retry the selection")
+        now = monotonic()
+        self._descendant_cache = {key: value for key, value in self._descendant_cache.items() if now - value[0] < 300}
+        self._descendant_cache[page_id] = (now, pages)
+        return pages
 
     def search_pages(self, query: str, limit: int = 25) -> list[dict[str, Any]]:
         trimmed = query.strip()
@@ -269,7 +317,7 @@ class ConfluenceClient:
         user = self._client.get("rest/api/user/current")
         if not isinstance(user, dict):
             _auth_diag("fetch_current_user response is not a dict")
-            raise ValueError("Confluence session is not authenticated")
+            raise ValueError("Unexpected Confluence user response")
 
         display_name = str(user.get("displayName") or user.get("username") or "").strip()
         user_type = str(user.get("type") or user.get("userType") or "").strip().lower()
@@ -279,7 +327,7 @@ class ConfluenceClient:
         )
         if not display_name or display_name.lower() == "anonymous" or user_type == "anonymous":
             _auth_diag("fetch_current_user rejected: anonymous or missing display name")
-            raise ValueError("Confluence session is not authenticated")
+            raise AuthenticationRequired("Confluence session is not authenticated")
 
         return {
             "displayName": display_name,

@@ -6,6 +6,7 @@
     "tagline": "Confluence 发布工具"
   },
   "nav": {
+    "breadcrumb": "当前位置",
     "authentication": "认证",
     "spaces": "空间",
     "export": "导出",
@@ -24,6 +25,8 @@
     "system": "跟随系统"
   },
   "buttons": {
+    "next": "下一步",
+    "backToSpaces": "返回空间",
     "cancel": "取消",
     "clear": "清除",
     "go": "前往",

@@ -1,17 +1,35 @@
 import { useTranslation } from 'react-i18next'
 import { useThemeStore, ThemeMode } from '../../stores/themeStore'
+import { useNavStore } from '../../stores/navStore'
 
 function Header() {
   const { t } = useTranslation('common')
   const { mode, setMode } = useThemeStore()
+  const { activeView, setActiveView } = useNavStore()
 
   return (
     <header className="bg-bg-card border-b border-border px-8 py-6">
       <div className="flex items-center justify-between animate-fade-in stagger-1">
         <div>
-          <h1 className="font-display text-xl font-semibold text-text-primary tracking-tight">
-            {t('app.title')}
-          </h1>
+          {activeView === 'export' ? (
+            <nav aria-label={t('nav.breadcrumb')} className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveView('spaces')}
+                className="rounded text-sm text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {t('buttons.backToSpaces')}
+              </button>
+              <span className="text-text-muted" aria-hidden="true">›</span>
+              <h1 className="font-display text-xl font-semibold text-text-primary tracking-tight" aria-current="page">
+                {t('nav.export')}
+              </h1>
+            </nav>
+          ) : (
+            <h1 className="font-display text-xl font-semibold text-text-primary tracking-tight">
+              {t('app.title')}
+            </h1>
+          )}
           <p className="text-sm text-text-secondary mt-1">
             {t('app.subtitle')}
           </p>

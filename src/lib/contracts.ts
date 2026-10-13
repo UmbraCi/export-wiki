@@ -9,6 +9,7 @@ export interface ManualAuthConfig {
 }
 
 export interface AuthStatus {
+  validationError?: string | null
   authenticated: boolean
   method: AuthMethod | null
   baseUrl: string | null

@@ -1,5 +1,10 @@
 {
   "AUTH_REQUIRED": "Authentication required",
+  "SESSION_EXPIRED": "Your saved session has expired. Please sign in again.",
+  "AUTH_CHECK_FAILED": "Could not verify your saved connection. Your credentials were kept; check the network and retry.",
+  "AUTH_STORAGE_FAILED": "Could not read or save the login credentials file. Check the app configuration directory permissions and file contents, then retry.",
+  "AUTH_OPERATION_CANCELLED": "Authentication changed while this request was running. Please retry.",
+  "BROWSER_SESSION_CLEAR_FAILED": "Saved credentials were deleted, but login-window cookies could not be cleared. Please retry signing out.",
   "INVALID_CONFLUENCE_URL": "Enter a Confluence page or space URL",
   "INVALID_HTTPS_URL": "Confluence URL must start with https://",
   "EMPTY_SELECTION": "Select at least one page to export",

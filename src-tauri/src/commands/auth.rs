@@ -43,6 +43,7 @@ pub enum ManualAuthMethod {
 
 pub(crate) fn unauthenticated_status() -> AuthStatus {
     AuthStatus {
+        validation_error: None,
         authenticated: false,
         method: None,
         base_url: None,
@@ -116,7 +117,8 @@ pub async fn complete_sso_login(
     app: tauri::AppHandle,
     state: State<'_, crate::state::AppState>,
 ) -> Result<AuthStatus, String> {
-    crate::auth::webview_auth::complete_sso_login(app, &state.secret_store, &state.sso_session).await
+    crate::auth::webview_auth::complete_sso_login(app, &state.secret_store, &state.sso_session)
+        .await
 }
 
 #[tauri::command]
@@ -152,36 +154,11 @@ pub async fn save_manual_auth(
         error
     })?;
 
-    state.secret_store.save_manual_auth(&config).map_err(|error| {
-        auth_diag!("secret store save failed: {error}");
-        error
-    })?;
-    auth_diag!("credentials saved to secret store");
-
-    if config.method == ManualAuthMethod::Cookie {
-        let sidecar_auth = state
-            .secret_store
-            .load_sidecar_auth()?
-            .ok_or_else(|| app_error::auth_required())?;
-        auth_diag!(
-            "validating cookie via sidecar base_url={} method={:?}",
-            sidecar_auth.base_url,
-            sidecar_auth.method
-        );
-
-        let client = SidecarClient::resolve_default().map_err(|error| {
-            auth_diag!("sidecar resolve failed: {error}");
-            error
-        })?;
-
-        if let Err(error) = client.get_current_user(&sidecar_auth).await {
-            auth_diag!("cookie validation failed: {error}");
-            let _ = state.secret_store.clear();
-            return Err(app_error::cookie_validation_failed(&error));
-        }
-
-        auth_diag!("cookie validation succeeded");
-    }
+    let generation = state.secret_store.generation()?;
+    let candidate = crate::auth::secret_store::manual_sidecar_auth(&config)?;
+    let client = SidecarClient::resolve_default()?;
+    client.get_current_user(&candidate).await?;
+    state.secret_store.save_manual_auth(&config, generation)?;
 
     let status = state.secret_store.load_status()?;
     auth_diag!(
@@ -193,19 +170,143 @@ pub async fn save_manual_auth(
 }
 
 #[tauri::command]
-pub fn get_auth_status(state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
-    state.secret_store.load_status()
+pub async fn get_auth_status(
+    state: State<'_, crate::state::AppState>,
+) -> Result<AuthStatus, String> {
+    restore_auth_status(&state.secret_store, |auth| async move {
+        SidecarClient::resolve_default()?
+            .get_current_user(&auth)
+            .await
+            .map(|_| ())
+    })
+    .await
+}
+
+async fn restore_auth_status<S, F, Fut>(store: &S, validate: F) -> Result<AuthStatus, String>
+where
+    S: SecretStore,
+    F: FnOnce(crate::auth::SidecarAuthConfig) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
+    let generation = store.generation()?;
+    let mut status = store.load_status()?;
+    let Some(auth) = store.load_sidecar_auth()? else {
+        return Ok(status);
+    };
+    let result = validate(auth).await;
+    if store.generation()? != generation {
+        return Err(crate::auth::secret_store::cancelled_auth_error());
+    }
+    if let Err(error) = result {
+        status.authenticated = false;
+        if error == app_error::auth_required() {
+            store.clear_if_unchanged(generation)?;
+            status.validation_error = Some("SESSION_EXPIRED".into());
+        } else {
+            status.validation_error = Some("AUTH_CHECK_FAILED".into());
+        }
+    }
+    Ok(status)
 }
 
 #[tauri::command]
-pub fn logout(state: State<crate::state::AppState>) -> Result<AuthStatus, String> {
+pub async fn logout(
+    app: tauri::AppHandle,
+    state: State<'_, crate::state::AppState>,
+) -> Result<AuthStatus, String> {
     state.secret_store.clear()?;
-    Ok(unauthenticated_status())
+    crate::sidecar::client::clear_directory_worker().await;
+    crate::auth::webview_auth::cancel_sso_login(&app, &state.sso_session)?;
+    let cleared = tokio::task::spawn_blocking(move || {
+        use tauri::Manager;
+        let window = app
+            .get_webview_window("main")
+            .ok_or("main window not available")?;
+        for cookie in window.cookies().map_err(|_| "reading cookies failed")? {
+            window
+                .delete_cookie(cookie)
+                .map_err(|_| "clearing cookies failed")?;
+        }
+        Ok::<(), &str>(())
+    })
+    .await;
+    let mut status = unauthenticated_status();
+    if !matches!(cleared, Ok(Ok(()))) {
+        status.validation_error = Some("BROWSER_SESSION_CLEAR_FAILED".into());
+    }
+    Ok(status)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn restoring_valid_credentials_does_not_open_login_or_change_store() {
+        let (_directory, store) = saved_store();
+        assert!(
+            restore_auth_status(&store, |_| async { Ok(()) })
+                .await
+                .unwrap()
+                .authenticated
+        );
+        assert_eq!(store.generation().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn expired_credentials_are_deleted_but_url_is_kept_for_relogin() {
+        let (_directory, store) = saved_store();
+        let status = restore_auth_status(&store, |_| async { Err(app_error::auth_required()) })
+            .await
+            .unwrap();
+        assert!(!status.authenticated);
+        assert_eq!(status.base_url.as_deref(), Some("https://wiki.example.com"));
+        assert_eq!(status.validation_error.as_deref(), Some("SESSION_EXPIRED"));
+        assert!(store.load_sidecar_auth().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn network_failure_keeps_saved_credentials_for_retry() {
+        let (_directory, store) = saved_store();
+        let status = restore_auth_status(&store, |_| async { Err("connection timed out".into()) })
+            .await
+            .unwrap();
+        assert!(!status.authenticated);
+        assert_eq!(
+            status.validation_error.as_deref(),
+            Some("AUTH_CHECK_FAILED")
+        );
+        assert!(store.load_sidecar_auth().unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn late_validation_cannot_delete_new_credentials() {
+        let (_directory, store) = saved_store();
+        let result = restore_auth_status(&store, |_| async {
+            store.clear().unwrap();
+            Err(app_error::auth_required())
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            crate::auth::secret_store::cancelled_auth_error()
+        );
+    }
+
+    fn saved_store() -> (tempfile::TempDir, crate::auth::PersistentSecretStore) {
+        let (directory, store) = crate::auth::secret_store::tests::test_store();
+        store
+            .save_sso_auth(
+                &crate::auth::SsoAuthConfig {
+                    base_url: "https://wiki.example.com".into(),
+                    cookie: "session=abc".into(),
+                    display_name: None,
+                },
+                0,
+            )
+            .unwrap();
+        (directory, store)
+    }
 
     #[test]
     fn unauthenticated_status_is_empty() {
@@ -241,7 +342,10 @@ mod tests {
         })
         .expect_err("missing username should fail");
 
-        assert_eq!(error, AppError::new(codes::API_TOKEN_REQUIRED).into_invoke_error());
+        assert_eq!(
+            error,
+            AppError::new(codes::API_TOKEN_REQUIRED).into_invoke_error()
+        );
     }
 
     #[test]
@@ -255,6 +359,9 @@ mod tests {
         })
         .expect_err("missing cookie should fail");
 
-        assert_eq!(error, AppError::new(codes::COOKIE_REQUIRED).into_invoke_error());
+        assert_eq!(
+            error,
+            AppError::new(codes::COOKIE_REQUIRED).into_invoke_error()
+        );
     }
 }

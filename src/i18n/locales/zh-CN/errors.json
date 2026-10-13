@@ -1,5 +1,10 @@
 {
   "AUTH_REQUIRED": "需要认证",
+  "SESSION_EXPIRED": "已保存的会话已失效，请重新登录。",
+  "AUTH_CHECK_FAILED": "暂时无法验证已保存的连接。凭据已保留，请检查网络后重试。",
+  "AUTH_STORAGE_FAILED": "无法读取或保存登录凭据文件，请检查应用配置目录权限及文件内容后重试。",
+  "AUTH_OPERATION_CANCELLED": "请求期间认证状态已改变，请重试。",
+  "BROWSER_SESSION_CLEAR_FAILED": "已删除保存的凭据，但未能清除登录窗口的 Cookie，请再次退出登录。",
   "INVALID_CONFLUENCE_URL": "请输入 Confluence 页面或空间 URL",
   "INVALID_HTTPS_URL": "Confluence URL 必须以 https:// 开头",
   "EMPTY_SELECTION": "请至少选择一个页面进行导出",

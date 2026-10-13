@@ -10,7 +10,6 @@ function Sidebar() {
   const navItems: { view: AppView; label: string }[] = [
     { view: 'authentication', label: t('nav.authentication') },
     { view: 'spaces', label: t('nav.spaces') },
-    { view: 'export', label: t('nav.export') },
     { view: 'settings', label: t('nav.settings') },
   ]
 
@@ -40,7 +39,7 @@ function Sidebar() {
             <NavItem
               key={view}
               label={label}
-              active={activeView === view}
+              active={activeView === view || (view === 'spaces' && activeView === 'export')}
               disabled={!authenticated && authRequiredViews.includes(view)}
               disabledTitle={t('nav.signInFirst')}
               onClick={() => setActiveView(view)}
@@ -77,6 +76,7 @@ function NavItem({
       onClick={onClick}
       disabled={disabled}
       title={disabled ? disabledTitle : undefined}
+      aria-current={active ? 'page' : undefined}
       className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
         disabled
           ? 'text-text-muted cursor-not-allowed opacity-50'

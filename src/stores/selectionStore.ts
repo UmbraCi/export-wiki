@@ -23,7 +23,7 @@ interface SelectionState {
   fetchSpaces: () => Promise<void>
   fetchPageTree: (spaceKey: string) => Promise<void>
   fetchPageChildren: (pageId: string) => Promise<void>
-  togglePageSubtreeSelection: (pageId: string, title: string) => Promise<void>
+  togglePageSubtreeSelection: (pageId: string, title: string, checked?: boolean) => Promise<void>
   setActiveSpaceKey: (spaceKey: string) => void
   togglePageSelection: (pageId: string, title: string) => void
   clearSelection: () => void
@@ -49,10 +49,6 @@ function findPageNode(nodes: PageNode[], pageId: string): PageNode | undefined {
     if (found) return found
   }
   return undefined
-}
-
-function collectPageNodes(node: PageNode): PageNode[] {
-  return [node, ...node.children.flatMap(collectPageNodes)]
 }
 
 export const useSelectionStore = create<SelectionState>((set, get) => ({
@@ -125,28 +121,15 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
     }
   },
 
-  togglePageSubtreeSelection: async (pageId) => {
+  togglePageSubtreeSelection: async (pageId, _title, checked) => {
     const { activeSpaceKey, pageTrees, selectedPageIds } = get()
     if (!activeSpaceKey || get().loadingPageIds.includes(pageId)) return
 
     const current = findPageNode(pageTrees[activeSpaceKey] ?? [], pageId)
     if (!current) return
 
-    const loadedIds = get().selectedSubtreePageIds[pageId] ?? collectPageNodes(current).map((node) => node.id)
-    if (selectedPageIds.includes(pageId)) {
-      set((state) => {
-        const nextTitles = { ...state.selectedPageTitles }
-        const nextSubtreePageIds = { ...state.selectedSubtreePageIds }
-        loadedIds.forEach((id) => delete nextTitles[id])
-        delete nextSubtreePageIds[pageId]
-        return {
-          selectedPageIds: state.selectedPageIds.filter((id) => !loadedIds.includes(id)),
-          selectedPageTitles: nextTitles,
-          selectedSubtreePageIds: nextSubtreePageIds,
-        }
-      })
-      return
-    }
+    const shouldSelect = checked ?? !selectedPageIds.includes(pageId)
+    const cachedIds = get().selectedSubtreePageIds[pageId]
 
     set((state) => ({
       loadingPageIds: [...state.loadingPageIds, pageId],
@@ -155,19 +138,28 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
     }))
 
     try {
-      const subtree = [current, ...await api.getPageDescendants(pageId)]
-      set((state) => ({
-        selectedPageIds: [...new Set([...state.selectedPageIds, ...subtree.map((node) => node.id)])],
-        selectedPageTitles: {
-          ...state.selectedPageTitles,
-          ...Object.fromEntries(subtree.map((node) => [node.id, node.title])),
-        },
-        selectedSubtreePageIds: {
-          ...state.selectedSubtreePageIds,
-          [pageId]: subtree.map((node) => node.id),
-        },
-        loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
-      }))
+      const subtree = !shouldSelect && cachedIds ? [] : [current, ...await api.getPageDescendants(pageId)]
+      const subtreeIds = !shouldSelect && cachedIds ? cachedIds : subtree.map((node) => node.id)
+      const removedIds = new Set(subtreeIds)
+      set((state) => {
+        const nextTitles = { ...state.selectedPageTitles }
+        if (shouldSelect) {
+          Object.assign(nextTitles, Object.fromEntries(subtree.map((node) => [node.id, node.title])))
+        } else {
+          subtreeIds.forEach((id) => delete nextTitles[id])
+        }
+        return {
+          selectedPageIds: shouldSelect
+            ? [...new Set([...state.selectedPageIds, ...subtreeIds])]
+            : state.selectedPageIds.filter((id) => !removedIds.has(id)),
+          selectedPageTitles: nextTitles,
+          selectedSubtreePageIds: {
+            ...state.selectedSubtreePageIds,
+            [pageId]: subtreeIds,
+          },
+          loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
+        }
+      })
     } catch (err) {
       set((state) => ({
         ...setSelectionError(err),

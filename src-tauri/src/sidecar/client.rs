@@ -1,13 +1,14 @@
-//! Launch the packaged sidecar and exchange a single JSON-line request.
+//! Reuse a sidecar for browsing; isolate authentication checks and cancellable exports.
 
 use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::sync::{Mutex, Notify};
 use uuid::Uuid;
 
 use crate::auth::SidecarAuthConfig;
@@ -70,6 +71,119 @@ pub struct SidecarClient {
     program: PathBuf,
 }
 
+#[derive(Default)]
+struct DirectoryWorker {
+    process: Mutex<Option<DirectoryProcess>>,
+    generation: AtomicU64,
+    reset: Notify,
+}
+
+static DIRECTORY_WORKER: DirectoryWorker = DirectoryWorker {
+    process: Mutex::const_new(None),
+    generation: AtomicU64::new(0),
+    reset: Notify::const_new(),
+};
+
+struct DirectoryProcess {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+impl DirectoryProcess {
+    fn spawn(program: &Path) -> Result<Self, String> {
+        let mut child = Command::new(program)
+            .kill_on_drop(true)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|error| format!("spawn directory sidecar: {error}"))?;
+        let stdin = child.stdin.take().ok_or("sidecar stdin not available")?;
+        let stdout = child.stdout.take().ok_or("sidecar stdout not available")?;
+        Ok(Self {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+        })
+    }
+
+    async fn exchange(&mut self, line: &str, request_id: &str) -> Result<SidecarResponse, String> {
+        self.stdin
+            .write_all(format!("{line}\n").as_bytes())
+            .await
+            .map_err(|error| format!("write directory sidecar request: {error}"))?;
+        self.stdin
+            .flush()
+            .await
+            .map_err(|error| format!("flush directory sidecar request: {error}"))?;
+        let mut response_line = String::new();
+        let size = self
+            .stdout
+            .read_line(&mut response_line)
+            .await
+            .map_err(|error| format!("read directory sidecar response: {error}"))?;
+        if size == 0 {
+            return Err("directory sidecar stopped; retry the request".into());
+        }
+        let response = parse_response(&response_line)
+            .map_err(|error| format!("decode directory sidecar response: {error}"))?;
+        if response.protocol_version != PROTOCOL_VERSION || response.request_id != request_id {
+            return Err("directory sidecar response does not match the request".into());
+        }
+        Ok(response)
+    }
+}
+
+impl DirectoryWorker {
+    async fn clear(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        self.reset.notify_waiters();
+        self.process.lock().await.take();
+    }
+
+    async fn request(
+        &self,
+        program: &Path,
+        line: &str,
+        request_id: &str,
+    ) -> Result<SidecarResponse, String> {
+        let generation = self.generation.load(Ordering::SeqCst);
+        let mut slot = self.process.lock().await;
+        let reset = self.reset.notified();
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return Err("directory sidecar session changed; retry the request".into());
+        }
+        // Taking ownership also kills the process if this future is cancelled mid-response.
+        let mut process = match slot.take() {
+            Some(process) => process,
+            None => DirectoryProcess::spawn(program)?,
+        };
+        if process
+            .child
+            .try_wait()
+            .map_err(|error| format!("check directory sidecar: {error}"))?
+            .is_some()
+        {
+            process = DirectoryProcess::spawn(program)?;
+        }
+        let response = tokio::select! {
+            _ = reset => return Err("directory sidecar session changed; retry the request".into()),
+            response = tokio::time::timeout(Duration::from_secs(120), process.exchange(line, request_id)) => {
+                response.map_err(|_| "directory sidecar request timed out".to_string())?
+            }
+        };
+        if response.is_ok() {
+            *slot = Some(process);
+        }
+        response
+    }
+}
+
+pub async fn clear_directory_worker() {
+    DIRECTORY_WORKER.clear().await;
+}
+
 impl SidecarClient {
     pub fn resolve_default() -> Result<Self, String> {
         Ok(Self {
@@ -77,10 +191,27 @@ impl SidecarClient {
         })
     }
 
-    pub async fn request(&self, request_type: &str, payload: Value) -> Result<SidecarResponse, String> {
+    pub async fn request(
+        &self,
+        request_type: &str,
+        payload: Value,
+    ) -> Result<SidecarResponse, String> {
         let request_id = Uuid::new_v4().to_string();
         let line = build_request_line(request_type, &request_id, payload);
-        let response = run_one_request(&self.program, &line).await?;
+        let response = if matches!(
+            request_type,
+            "get_spaces"
+                | "get_page_tree"
+                | "get_page_children"
+                | "get_page_descendants"
+                | "search_pages"
+        ) {
+            DIRECTORY_WORKER
+                .request(&self.program, &line, &request_id)
+                .await?
+        } else {
+            run_one_request(&self.program, &line).await?
+        };
 
         if !response.ok {
             return Err(response
@@ -160,8 +291,12 @@ impl SidecarClient {
         &self,
         auth: &SidecarAuthConfig,
     ) -> Result<SidecarResponse, String> {
-        self.request("get_current_user", json!({ "auth": auth_payload(auth) }))
-            .await
+        tokio::time::timeout(
+            Duration::from_secs(20),
+            self.request("get_current_user", json!({ "auth": auth_payload(auth) })),
+        )
+        .await
+        .map_err(|_| "authentication check timed out".to_string())?
     }
 
     pub async fn export_pages_with_cancel(
@@ -249,6 +384,7 @@ async fn run_one_request_inner(
 ) -> Result<SidecarResponse, String> {
     let payload = request_json_line.as_ref();
     let mut child = Command::new(program.as_ref())
+        .kill_on_drop(true)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -324,7 +460,10 @@ async fn run_one_request_inner(
     let response = parse_response(&line).map_err(|e| format!("decode sidecar response: {e}"))?;
 
     if !status.success() {
-        let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+        let code = status
+            .code()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "signal".into());
         return Err(format!(
             "sidecar process exited unsuccessfully ({code}): {}",
             response
@@ -340,6 +479,118 @@ async fn run_one_request_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn echo_sidecar() -> (tempfile::TempDir, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let program = directory.path().join("sidecar.sh");
+        std::fs::write(&program, r#"#!/bin/sh
+while IFS= read -r line; do
+    request_id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+    printf '{"protocol_version":1,"request_id":"%s","ok":true,"payload":{"pid":%s}}\n' "$request_id" "$$"
+done
+"#).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (directory, program)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn directory_worker_reuses_process_and_restarts_after_exit() {
+        let (_directory, program) = echo_sidecar();
+        let worker = DirectoryWorker::default();
+        let first = worker
+            .request(
+                &program,
+                &build_request_line("ping", "first", json!({})),
+                "first",
+            )
+            .await
+            .unwrap();
+        let second = worker
+            .request(
+                &program,
+                &build_request_line("ping", "second", json!({})),
+                "second",
+            )
+            .await
+            .unwrap();
+        assert_eq!(first.payload["pid"], second.payload["pid"]);
+        {
+            let mut slot = worker.process.lock().await;
+            slot.as_mut().unwrap().child.kill().await.unwrap();
+        }
+        let restarted = worker
+            .request(
+                &program,
+                &build_request_line("ping", "third", json!({})),
+                "third",
+            )
+            .await
+            .unwrap();
+        assert_ne!(first.payload["pid"], restarted.payload["pid"]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn directory_worker_discards_mismatched_responses() {
+        let (_directory, program) = echo_sidecar();
+        let worker = DirectoryWorker::default();
+        let result = worker
+            .request(
+                &program,
+                &build_request_line("ping", "wrong", json!({})),
+                "expected",
+            )
+            .await;
+        assert!(result.unwrap_err().contains("does not match"));
+        assert!(worker.process.lock().await.is_none());
+        assert!(worker
+            .request(
+                &program,
+                &build_request_line("ping", "next", json!({})),
+                "next"
+            )
+            .await
+            .is_ok());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn clearing_directory_worker_interrupts_pending_requests() {
+        let (_directory, program) = echo_sidecar();
+        std::fs::write(
+            &program,
+            "#!/bin/sh\nIFS= read -r line\nIFS= read -r next_line\n",
+        )
+        .unwrap();
+        let worker = std::sync::Arc::new(DirectoryWorker::default());
+        let request_worker = worker.clone();
+        let pending = tokio::spawn(async move {
+            request_worker
+                .request(
+                    &program,
+                    &build_request_line("ping", "pending", json!({})),
+                    "pending",
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while worker.process.try_lock().is_ok() {
+                tokio::task::yield_now().await;
+            }
+            worker.clear().await;
+        })
+        .await
+        .unwrap();
+        assert!(pending
+            .await
+            .unwrap()
+            .unwrap_err()
+            .contains("session changed"));
+        assert!(worker.process.lock().await.is_none());
+    }
 
     #[test]
     fn parses_successful_sidecar_response() {

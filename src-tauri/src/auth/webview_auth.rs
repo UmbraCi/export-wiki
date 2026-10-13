@@ -1272,6 +1272,7 @@ pub async fn complete_sso_login<S: SecretStore + Send + Sync>(
     secret_store: &S,
     session_manager: &SsoSessionManager,
 ) -> Result<AuthStatus, String> {
+    let generation = secret_store.generation()?;
     let (confluence_host, stored_base) = {
         let guard = session_manager
             .session
@@ -1313,20 +1314,18 @@ pub async fn complete_sso_login<S: SecretStore + Send + Sync>(
     .await
     .map_err(|error| format!("extracting SSO cookies: {error}"))??;
 
-    secret_store.save_sso_auth(&SsoAuthConfig {
+    let config = SsoAuthConfig {
         base_url: stored_base.clone(),
         cookie,
         display_name: None,
-    })?;
-
-    let sidecar_auth = secret_store
-        .load_sidecar_auth()?
-        .ok_or_else(|| "Authentication required".to_string())?;
+    };
+    let sidecar_auth = crate::auth::secret_store::sso_sidecar_auth(&config)?;
     let client = SidecarClient::resolve_default()?;
     client
         .get_current_user(&sidecar_auth)
         .await
         .map_err(|error| format!("SSO session validation failed: {error}"))?;
+    secret_store.save_sso_auth(&config, generation)?;
 
     cancel_active_session(session_manager);
     close_sso_window(&app);

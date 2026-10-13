@@ -5,13 +5,28 @@ from __future__ import annotations
 import json
 import sys
 
-from confluence_export_sidecar.confluence_client import ConfluenceClient
+from confluence_export_sidecar.confluence_client import AuthenticationRequired, ConfluenceClient
+from requests import HTTPError
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
 from confluence_export_sidecar.exporter import export_migration_package
 from confluence_export_sidecar.log import get_logger
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
 log = get_logger(__name__)
+_browse_client: ConfluenceClient | None = None
+_browse_auth: dict | None = None
+
+
+def _get_browse_client(auth: dict) -> ConfluenceClient:
+    global _browse_client, _browse_auth
+    if _browse_client is None or _browse_auth != auth:
+        if _browse_client is not None:
+            _browse_client.close()
+        _browse_client = None
+        _browse_auth = None
+        _browse_client = ConfluenceClient(auth.copy())
+        _browse_auth = auth.copy()
+    return _browse_client
 
 
 def _error_response(request_id: str, message: str) -> dict:
@@ -22,6 +37,14 @@ def _error_response(request_id: str, message: str) -> dict:
         "payload": {},
         "error": message,
     }
+
+
+def _exception_response(request_id: str, exc: Exception) -> dict:
+    if isinstance(exc, AuthenticationRequired) or (
+        isinstance(exc, HTTPError) and exc.response is not None and exc.response.status_code == 401
+    ):
+        return _error_response(request_id, json.dumps({"code": "AUTH_REQUIRED"}, separators=(",", ":")))
+    return _error_response(request_id, str(exc))
 
 
 def _dispatch(req: dict) -> dict:
@@ -38,7 +61,7 @@ def _dispatch(req: dict) -> dict:
             return _error_response(request_id, "auth payload is required")
 
         try:
-            client = ConfluenceClient(auth)
+            client = ConfluenceClient(auth) if req_type == "get_current_user" else _get_browse_client(auth)
             if req_type == "get_spaces":
                 return success_response(request_id, {"spaces": client.fetch_spaces()})
             if req_type == "get_page_tree":
@@ -75,7 +98,7 @@ def _dispatch(req: dict) -> dict:
                 )
             return success_response(request_id, {"user": client.fetch_current_user()})
         except Exception as exc:  # noqa: BLE001
-            return _error_response(request_id, str(exc))
+            return _exception_response(request_id, exc)
 
     if req_type == "export_pages":
         auth = payload.get("auth")
@@ -100,7 +123,7 @@ def _dispatch(req: dict) -> dict:
             )
             return success_response(request_id, {"pages": pages})
         except Exception as exc:  # noqa: BLE001
-            return _error_response(request_id, str(exc))
+            return _exception_response(request_id, exc)
 
     if req_type == "export_migration_package":
         auth = payload.get("auth")
@@ -121,7 +144,7 @@ def _dispatch(req: dict) -> dict:
             )
             return success_response(request_id, {"package_path": package_path})
         except Exception as exc:  # noqa: BLE001
-            return _error_response(request_id, str(exc))
+            return _exception_response(request_id, exc)
 
     return _error_response(request_id, f"unsupported type {req_type!r}")
 

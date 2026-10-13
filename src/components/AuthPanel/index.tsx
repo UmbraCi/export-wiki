@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAuthStore, formatCurrentUrl, initSsoEventListeners, type ManualAuthMode } from '../../stores/authStore'
+import { useAuthStore, formatCurrentUrl, type ManualAuthMode } from '../../stores/authStore'
 import { formatAuthMethod } from '../../i18n/backend'
 import Button from '../common/Button'
 import Input from '../common/Input'
@@ -36,11 +36,6 @@ function AuthPanel() {
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
-
-  useEffect(() => {
-    initSsoEventListeners()
-    void loadStatus()
-  }, [loadStatus])
 
   useEffect(() => {
     if (error) {
@@ -174,6 +169,16 @@ function AuthPanel() {
         </div>
 
         <div className="p-8 space-y-6">
+          {status.validationError === 'AUTH_CHECK_FAILED' && (
+            <Button variant="secondary" loading={isLoading} onClick={() => void loadStatus()}>
+              {t('auth:retrySavedSession')}
+            </Button>
+          )}
+          {status.validationError === 'BROWSER_SESSION_CLEAR_FAILED' && (
+            <Button variant="secondary" loading={isLoading} onClick={() => void logout()}>
+              {t('common:buttons.logout')}
+            </Button>
+          )}
           {ssoSession?.active ? (
             <SsoInProgressPanel
               entryUrl={ssoSession.entryUrl}

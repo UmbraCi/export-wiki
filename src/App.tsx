@@ -6,7 +6,7 @@ import ContentPreview from './components/ContentPreview'
 import ExportPanel from './components/ExportPanel'
 import ProgressPanel from './components/ProgressPanel'
 import SettingsPanel from './components/SettingsPanel'
-import { useAuthStore } from './stores/authStore'
+import { initSsoEventListeners, useAuthStore } from './stores/authStore'
 import { useConfigStore } from './stores/configStore'
 import { authRequiredViews, useNavStore } from './stores/navStore'
 
@@ -17,7 +17,13 @@ function App() {
 
   useEffect(() => {
     void loadConfig()
-  }, [loadConfig])
+    initSsoEventListeners()
+    void useAuthStore.getState().loadStatus().then(() => {
+      if (useAuthStore.getState().status.authenticated && useNavStore.getState().activeView === 'authentication') {
+        setActiveView('spaces')
+      }
+    })
+  }, [loadConfig, setActiveView])
 
   useEffect(() => {
     if (!status.authenticated && authRequiredViews.includes(activeView)) {
@@ -38,13 +44,19 @@ function App() {
       case 'authentication':
         return <AuthPanel />
       case 'spaces':
-        return <SpaceBrowser />
       case 'export':
         return (
           <>
-            <ContentPreview />
-            <ExportPanel />
-            <ProgressPanel />
+            <div hidden={activeView === 'export'}>
+              <SpaceBrowser />
+            </div>
+            {activeView === 'export' && (
+              <>
+                <ContentPreview />
+                <ExportPanel />
+                <ProgressPanel />
+              </>
+            )}
           </>
         )
       default:

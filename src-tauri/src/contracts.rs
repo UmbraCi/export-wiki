@@ -11,6 +11,8 @@ pub enum AuthMethod {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_error: Option<String>,
     pub authenticated: bool,
     pub method: Option<AuthMethod>,
     pub base_url: Option<String>,
