@@ -12,7 +12,7 @@ export interface ExportLogEntry {
 
 export type ExportPanelOptions = Pick<
   ExportOptions,
-  'outputDir' | 'includeAttachments' | 'format'
+  'outputDir' | 'includeAttachments' | 'format' | 'flatten'
 >
 
 function logLevelForStatus(status: ExportProgressEvent['status']): ExportLogEntry['level'] {
@@ -50,6 +50,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
   logs: [],
   options: {
     includeAttachments: true,
+    flatten: true,
     outputDir: '',
     format: 'markdown',
   },
@@ -92,6 +93,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
         outputDir: options.outputDir,
         format: options.format,
         includeAttachments: options.includeAttachments,
+        flatten: options.flatten,
       })
       set({ isExporting: false, progress: 100 })
     } catch (err) {

@@ -13,7 +13,6 @@ function ExportPanel() {
   const canExport =
     selectedPageIds.length > 0 &&
     options.outputDir.trim().length > 0 &&
-    !(options.format === 'migration_package' && selectedPageIds.length !== 1) &&
     !isExporting
 
   return (
@@ -66,6 +65,28 @@ function ExportPanel() {
             <span className="text-sm font-medium text-text-primary">{t('export:attachments.label')}</span>
             <span className="block text-xs text-text-muted mt-1">
               {t('export:attachments.description')}
+            </span>
+          </div>
+        </label>}
+
+        {options.format === 'migration_package' && <label className="flex items-start gap-4 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setOptions({ flatten: !options.flatten })}
+            className={`w-12 h-7 rounded-full transition-all duration-200 flex items-center ${
+              options.flatten ? 'bg-accent' : 'bg-border'
+            }`}
+          >
+            <span
+              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                options.flatten ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <div className="flex-1">
+            <span className="text-sm font-medium text-text-primary">{t('export:migration.flatten.label')}</span>
+            <span className="block text-xs text-text-muted mt-1">
+              {t('export:migration.flatten.description')}
             </span>
           </div>
         </label>}

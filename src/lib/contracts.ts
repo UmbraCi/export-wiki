@@ -39,6 +39,8 @@ export interface PageNode {
   title: string
   parentId: string | null
   children: PageNode[]
+  childrenLoaded: boolean
+  hasChildren: boolean
 }
 
 export interface SearchResult {
@@ -60,6 +62,7 @@ export interface ExportOptions {
   outputDir: string
   format: ExportFormat
   includeAttachments: boolean
+  flatten: boolean
 }
 
 export interface ExportStats {

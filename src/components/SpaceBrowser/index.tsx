@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../lib/contracts'
 import { isInvalidConfluenceUrlError } from '../../i18n/backend'
 import { useSelectionStore } from '../../stores/selectionStore'
+import { Checkbox } from '@/components/ui/checkbox'
 import Input from '../common/Input'
 import Button from '../common/Button'
 
@@ -18,12 +19,14 @@ function SpaceBrowser() {
     urlInput,
     isLoadingSpaces,
     isLoadingPages,
+    loadingPageIds,
     isSearching,
     error,
     errorCode,
     fetchSpaces,
     setActiveSpaceKey,
-    togglePageSelection,
+    fetchPageChildren,
+    togglePageSubtreeSelection,
     searchPages,
     clearSearchResults,
     selectSearchResult,
@@ -33,6 +36,8 @@ function SpaceBrowser() {
 
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [localUrl, setLocalUrl] = useState(urlInput)
+  const [spaceSearch, setSpaceSearch] = useState('')
+  const [expandedPageIds, setExpandedPageIds] = useState<string[]>([])
 
   useEffect(() => {
     void fetchSpaces()
@@ -47,7 +52,29 @@ function SpaceBrowser() {
   }, [urlInput])
 
   const activePages = activeSpaceKey ? pageTrees[activeSpaceKey] ?? [] : []
+  const filteredSpaces = spaces.filter((space) =>
+    `${space.name} ${space.key}`.toLocaleLowerCase().includes(spaceSearch.trim().toLocaleLowerCase()),
+  )
   const showSearchResults = searchResults.length > 0 || isSearching
+
+  const togglePageExpanded = (pageId: string) => {
+    if (expandedPageIds.includes(pageId)) {
+      setExpandedPageIds((ids) => ids.filter((id) => id !== pageId))
+      return
+    }
+
+    setExpandedPageIds((ids) => [...ids, pageId])
+    const findPage = (nodes: PageNode[]): PageNode | undefined => {
+      for (const node of nodes) {
+        if (node.id === pageId) return node
+        const found = findPage(node.children)
+        if (found) return found
+      }
+      return undefined
+    }
+    const page = findPage(activePages)
+    if (page && !page.childrenLoaded) void fetchPageChildren(pageId)
+  }
 
   return (
     <div className="space-y-6 animate-fade-in stagger-3">
@@ -166,11 +193,19 @@ function SpaceBrowser() {
               : t('spaces:spaces.select')
           }
           isLoading={isLoadingSpaces}
-          isEmpty={spaces.length === 0}
-          emptyLabel={t('common:empty.noContent')}
+          isEmpty={spaces.length === 0 || filteredSpaces.length === 0}
+          emptyLabel={spaceSearch.trim() ? t('spaces:spaces.none') : t('common:empty.noContent')}
           error={showSearchResults ? null : error}
+          toolbar={
+            <Input
+              label={t('spaces:spaces.searchLabel')}
+              placeholder={t('spaces:spaces.searchPlaceholder')}
+              value={spaceSearch}
+              onChange={setSpaceSearch}
+            />
+          }
         >
-          {spaces.map((space) => (
+          {filteredSpaces.map((space) => (
             <button
               key={space.key}
               type="button"
@@ -214,7 +249,12 @@ function SpaceBrowser() {
               node={page}
               depth={0}
               selectedPageIds={selectedPageIds}
-              onToggle={togglePageSelection}
+              onToggle={(pageId, title) => void togglePageSubtreeSelection(pageId, title)}
+              expanded={expandedPageIds.includes(page.id)}
+              onExpand={togglePageExpanded}
+              isLoading={loadingPageIds.includes(page.id)}
+              expandedPageIds={expandedPageIds}
+              loadingPageIds={loadingPageIds}
             />
           ))}
         </Panel>
@@ -228,14 +268,26 @@ function PageTreeNode({
   depth,
   selectedPageIds,
   onToggle,
+  expanded,
+  onExpand,
+  isLoading,
+  expandedPageIds,
+  loadingPageIds,
 }: {
   node: PageNode
   depth: number
   selectedPageIds: string[]
   onToggle: (pageId: string, title: string) => void
+  expanded: boolean
+  onExpand: (pageId: string) => void
+  isLoading: boolean
+  expandedPageIds: string[]
+  loadingPageIds: string[]
 }) {
   const { t } = useTranslation('spaces')
   const selected = selectedPageIds.includes(node.id)
+  const hasSelectedDescendant = hasSelectedDescendantOf(node, selectedPageIds)
+  const checkboxState = selected ? true : hasSelectedDescendant ? 'indeterminate' : false
 
   return (
     <div>
@@ -245,20 +297,25 @@ function PageTreeNode({
         }`}
         style={{ paddingLeft: `${depth * 16 + 16}px` }}
       >
-        <button
-          type="button"
-          onClick={() => onToggle(node.id, node.title)}
-          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-            selected ? 'bg-accent border-accent' : 'border-border hover:border-text-muted'
-          }`}
+        {(node.hasChildren || !node.childrenLoaded) && (
+          <button
+            type="button"
+            onClick={() => onExpand(node.id)}
+            className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary"
+            aria-label={expanded ? t('pages.collapseAria', { title: node.title }) : t('pages.expandAria', { title: node.title })}
+          >
+            {isLoading ? (
+              <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span className={`text-lg leading-none transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
+            )}
+          </button>
+        )}
+        <Checkbox
+          checked={checkboxState}
+          onCheckedChange={() => onToggle(node.id, node.title)}
           aria-label={t('pages.selectAria', { title: node.title })}
-        >
-          {selected && (
-            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </button>
+        />
 
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium text-text-primary truncate block">{node.title}</span>
@@ -266,16 +323,27 @@ function PageTreeNode({
         </div>
       </div>
 
-      {node.children.map((child) => (
+      {expanded && node.children.map((child) => (
         <PageTreeNode
           key={child.id}
           node={child}
           depth={depth + 1}
           selectedPageIds={selectedPageIds}
           onToggle={onToggle}
+          expanded={expandedPageIds.includes(child.id)}
+          onExpand={onExpand}
+          isLoading={loadingPageIds.includes(child.id)}
+          expandedPageIds={expandedPageIds}
+          loadingPageIds={loadingPageIds}
         />
       ))}
     </div>
+  )
+}
+
+function hasSelectedDescendantOf(node: PageNode, selectedPageIds: string[]): boolean {
+  return node.children.some(
+    (child) => selectedPageIds.includes(child.id) || hasSelectedDescendantOf(child, selectedPageIds),
   )
 }
 
@@ -287,6 +355,7 @@ function Panel({
   inactive = false,
   error,
   emptyLabel,
+  toolbar,
   children,
 }: {
   title: string
@@ -296,6 +365,7 @@ function Panel({
   inactive?: boolean
   error?: string | null
   emptyLabel: string
+  toolbar?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -303,6 +373,7 @@ function Panel({
       <div className="px-6 py-5 border-b border-border">
         <h3 className="font-display text-lg font-semibold text-text-primary">{title}</h3>
         <p className="text-sm text-text-secondary mt-1">{subtitle}</p>
+        {toolbar && <div className="mt-4">{toolbar}</div>}
         {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
       </div>
 

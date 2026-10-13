@@ -8,7 +8,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from confluence_markdown_exporter.api_clients import _thread_local, get_thread_confluence
+from confluence_markdown_exporter.api_clients import (
+    ApiClientFactory,
+    _thread_local,
+    get_thread_confluence,
+)
 from confluence_markdown_exporter.confluence import Page, normalize_instance_url
 from confluence_markdown_exporter.utils.app_data_store import (
     ApiDetails,
@@ -18,9 +22,11 @@ from confluence_markdown_exporter.utils.app_data_store import (
 )
 from pydantic import SecretStr
 
-from confluence_export_sidecar.confluence_client import ConfluenceClient
 from confluence_export_sidecar.log import get_logger
-from confluence_export_sidecar.migration_package import publish_single_page_package
+from confluence_export_sidecar.migration_package import (
+    publish_flat_migration_package,
+    publish_single_page_package,
+)
 
 log = get_logger(__name__)
 
@@ -96,6 +102,13 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool) -> str:
             username=SecretStr(str(auth.get("username") or "")),
             api_token=SecretStr(str(auth.get("api_token") or "")),
         )
+    elif method in {"cookie", "sso"}:
+        cookie = str(auth.get("cookie") or "")
+        if not cookie:
+            raise ValueError("SSO auth requires cookie")
+        confluence_auth[base_url] = ApiDetails(session_cookies=SecretStr(cookie))
+    else:
+        raise ValueError(f"Unsupported or incomplete auth method: {method!r}")
 
     app_settings = AppSettings(
         export=export_config,
@@ -106,7 +119,10 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool) -> str:
 
     cme_confluence.settings = app_settings
 
-    client = ConfluenceClient(auth)._client
+    client = ApiClientFactory(app_settings.connection_config).create_confluence(
+        base_url,
+        confluence_auth[base_url],
+    )
     if not hasattr(_thread_local, "clients"):
         _thread_local.clients = {}
     _thread_local.clients[base_url] = client
@@ -238,5 +254,34 @@ def export_single_page_migration_package(
                 "html": page.html,
                 "markdown": page.markdown,
             },
+        )
+    )
+
+
+def export_migration_package(
+    *, page_ids: list[str], auth: dict[str, Any], output_dir: str, flatten: bool,
+) -> str:
+    """Fetch selected pages and publish a v2 Outline migration package."""
+    base_url = _configure_cme(auth, include_attachments=False)
+    pages = []
+    for page_id in page_ids:
+        page = Page.from_id(int(page_id), base_url)
+        if page.title == "Page not accessible":
+            raise ValueError(f"Page {page_id} is not accessible")
+        pages.append(
+            {
+                "id": str(page.id),
+                "title": page.title,
+                "source_path": [*(ancestor.title for ancestor in page.ancestors), page.title],
+                "source_url": page.web_url or f"{base_url}/pages/{page.id}",
+                "version": page.version.number,
+                "storage": page.body_storage,
+                "html": page.html,
+                "markdown": page.markdown,
+            }
+        )
+    return str(
+        publish_flat_migration_package(
+            output_dir=output_dir, pages=pages, flatten=flatten
         )
     )

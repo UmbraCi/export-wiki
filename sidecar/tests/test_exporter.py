@@ -2,9 +2,17 @@ import hashlib
 import json
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
-from confluence_export_sidecar.exporter import build_attachment_manifest, build_exported_page
-from confluence_export_sidecar.migration_package import publish_single_page_package
+from confluence_export_sidecar.exporter import (
+    _configure_cme,
+    build_attachment_manifest,
+    build_exported_page,
+)
+from confluence_export_sidecar.migration_package import (
+    publish_flat_migration_package,
+    publish_single_page_package,
+)
 
 
 def test_attachment_manifest_uses_obsidian_relative_paths():
@@ -26,6 +34,23 @@ def test_html_export_uses_html_filename():
 
     assert page["filename"] == "Home.html"
     assert page["html"] == "<h1>Home</h1>"
+
+
+def test_sso_export_uses_official_session_cookie_config():
+    with patch(
+        "confluence_export_sidecar.exporter.ApiClientFactory.create_confluence"
+    ) as create_confluence:
+        _configure_cme(
+            {
+                "base_url": "https://wiki.example.com",
+                "method": "sso",
+                "cookie": "JSESSIONID=abc",
+            },
+            include_attachments=False,
+        )
+
+    auth = create_confluence.call_args.args[1]
+    assert auth.session_cookies.get_secret_value() == "JSESSIONID=abc"
 
 
 def test_single_page_package_is_self_describing_and_id_scoped(tmp_path):
@@ -93,6 +118,79 @@ def test_invalid_page_identity_does_not_publish_a_zip(tmp_path):
         raise AssertionError("invalid page identity must fail")
 
     assert not list(tmp_path.glob("*.zip"))
+
+
+def test_flat_migration_package_keeps_pages_in_one_folder_and_disambiguates_titles(tmp_path):
+    package = publish_flat_migration_package(
+        output_dir=tmp_path,
+        flatten=True,
+        pages=[
+            {
+                "id": "1",
+                "title": "Overview",
+                "source_path": ["Engineering", "Web", "Overview"],
+                "source_url": "https://wiki.example.test/pages/1",
+                "version": 1,
+                "storage": "one",
+                "html": "one",
+                "markdown": "one",
+            },
+            {
+                "id": "2",
+                "title": "Overview",
+                "source_path": ["Engineering", "Web", "Guides", "Overview"],
+                "source_url": "https://wiki.example.test/pages/2",
+                "version": 1,
+                "storage": "two",
+                "html": "two",
+                "markdown": "two",
+            },
+        ],
+    )
+
+    with zipfile.ZipFile(package) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+
+    assert manifest["schemaVersion"] == 2
+    assert [page["targetFolder"] for page in manifest["pages"]] == ["Web", "Web"]
+    assert [page["title"] for page in manifest["pages"]] == [
+        "Engineering / Web / Overview [1]",
+        "Engineering / Web / Guides / Overview [2]",
+    ]
+
+
+def test_non_flat_migration_package_groups_by_first_source_level(tmp_path):
+    package = publish_flat_migration_package(
+        output_dir=tmp_path,
+        flatten=False,
+        pages=[
+            {
+                "id": "1",
+                "title": "Web",
+                "source_path": ["Engineering", "Web"],
+                "source_url": "https://wiki.example.test/pages/1",
+                "version": 1,
+                "storage": "one",
+                "html": "one",
+                "markdown": "one",
+            },
+            {
+                "id": "2",
+                "title": "Setup",
+                "source_path": ["Engineering", "Web", "Guides", "Setup"],
+                "source_url": "https://wiki.example.test/pages/2",
+                "version": 1,
+                "storage": "two",
+                "html": "two",
+                "markdown": "two",
+            },
+        ],
+    )
+
+    with zipfile.ZipFile(package) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+
+    assert [page["targetFolder"] for page in manifest["pages"]] == ["Web", "Guides"]
 
 
 def test_contract_fixture_has_the_required_single_page_shape():

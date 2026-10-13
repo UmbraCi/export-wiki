@@ -16,13 +16,18 @@
   "spaces": {
     "title": "Spaces",
     "viewing": "Viewing {{spaceKey}}",
-    "select": "Select a space"
+    "select": "Select a space",
+    "searchLabel": "Filter spaces",
+    "searchPlaceholder": "Filter by name or key",
+    "none": "No matching spaces"
   },
   "pages": {
     "title": "Pages",
     "selectedInSpace": "{{count}} selected in {{spaceKey}}",
     "selectSpace": "Select a space to browse pages",
-    "selectAria": "Select {{title}}"
+    "selectAria": "Select {{title}}",
+    "expandAria": "Expand {{title}}",
+    "collapseAria": "Collapse {{title}}"
   },
   "selected": {
     "title": "Selected Pages",

@@ -18,6 +18,12 @@
     "html": "HTML (.html)",
     "migration_package": "Outline 迁移包 (.zip)"
   },
+  "migration": {
+    "flatten": {
+      "label": "打平导入",
+      "description": "开启后，全部页面进入同一个文件夹；关闭后，按所选子树的第一层目录分组。"
+    }
+  },
   "button": {
     "export_one": "导出 {{count}} 个页面",
     "export_other": "导出 {{count}} 个页面"

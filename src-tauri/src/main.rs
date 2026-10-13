@@ -46,6 +46,8 @@ fn main() {
             commands::auth::logout,
             commands::spaces::get_spaces,
             commands::spaces::get_page_tree,
+            commands::spaces::get_page_children,
+            commands::spaces::get_page_descendants,
             commands::spaces::search_pages,
             commands::spaces::parse_confluence_url_command,
             commands::export::export_pages,

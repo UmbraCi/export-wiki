@@ -137,10 +137,6 @@ pub async fn export_pages(
     };
 
     if options.format == ExportFormat::MigrationPackage {
-        if options.page_ids.len() != 1 {
-            return Err(AppError::new(codes::MIGRATION_PACKAGE_REQUIRES_ONE_PAGE).into_invoke_error());
-        }
-
         emit_progress(
             &app,
             ExportProgressEvent {
@@ -154,10 +150,15 @@ pub async fn export_pages(
             },
         )?;
         client
-            .export_migration_package(&auth, &options.page_ids[0], &options.output_dir)
+            .export_migration_package(
+                &auth,
+                &options.page_ids,
+                &options.output_dir,
+                options.flatten,
+            )
             .await
             .map_err(|error| redact_secrets(&error))?;
-        stats.exported = 1;
+        stats.exported = total;
         emit_progress(
             &app,
             ExportProgressEvent {
@@ -166,7 +167,7 @@ pub async fn export_pages(
                 progress: 100,
                 stats,
                 message_key: Some("export.complete".into()),
-                message_params: Some(json!({ "exported": 1, "failed": 0, "attachments": 0 })),
+                message_params: Some(json!({ "exported": total, "failed": 0, "attachments": 0 })),
                 message: None,
             },
         )?;

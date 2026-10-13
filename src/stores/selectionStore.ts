@@ -14,12 +14,16 @@ interface SelectionState {
   urlInput: string
   isLoadingSpaces: boolean
   isLoadingPages: boolean
+  loadingPageIds: string[]
+  selectedSubtreePageIds: Record<string, string[]>
   isSearching: boolean
   error: string | null
   errorCode: string | null
 
   fetchSpaces: () => Promise<void>
   fetchPageTree: (spaceKey: string) => Promise<void>
+  fetchPageChildren: (pageId: string) => Promise<void>
+  togglePageSubtreeSelection: (pageId: string, title: string) => Promise<void>
   setActiveSpaceKey: (spaceKey: string) => void
   togglePageSelection: (pageId: string, title: string) => void
   clearSelection: () => void
@@ -38,6 +42,19 @@ function setSelectionError(error: unknown) {
   }
 }
 
+function findPageNode(nodes: PageNode[], pageId: string): PageNode | undefined {
+  for (const node of nodes) {
+    if (node.id === pageId) return node
+    const found = findPageNode(node.children, pageId)
+    if (found) return found
+  }
+  return undefined
+}
+
+function collectPageNodes(node: PageNode): PageNode[] {
+  return [node, ...node.children.flatMap(collectPageNodes)]
+}
+
 export const useSelectionStore = create<SelectionState>((set, get) => ({
   spaces: [],
   pageTrees: {},
@@ -49,6 +66,8 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
   urlInput: '',
   isLoadingSpaces: false,
   isLoadingPages: false,
+  loadingPageIds: [],
+  selectedSubtreePageIds: {},
   isSearching: false,
   error: null,
   errorCode: null,
@@ -73,6 +92,87 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
       }))
     } catch (err) {
       set({ ...setSelectionError(err), isLoadingPages: false })
+    }
+  },
+
+  fetchPageChildren: async (pageId) => {
+    const { activeSpaceKey } = get()
+    if (!activeSpaceKey || get().loadingPageIds.includes(pageId)) return
+
+    set((state) => ({ loadingPageIds: [...state.loadingPageIds, pageId] }))
+    try {
+      const children = await api.getPageChildren(pageId)
+      const updateNodes = (nodes: PageNode[]): PageNode[] =>
+        nodes.map((node) => {
+          if (node.id === pageId) {
+            return { ...node, children, childrenLoaded: true, hasChildren: children.length > 0 }
+          }
+          return { ...node, children: updateNodes(node.children) }
+        })
+
+      set((state) => ({
+        pageTrees: {
+          ...state.pageTrees,
+          [activeSpaceKey]: updateNodes(state.pageTrees[activeSpaceKey] ?? []),
+        },
+        loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
+      }))
+    } catch (err) {
+      set((state) => ({
+        ...setSelectionError(err),
+        loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
+      }))
+    }
+  },
+
+  togglePageSubtreeSelection: async (pageId) => {
+    const { activeSpaceKey, pageTrees, selectedPageIds } = get()
+    if (!activeSpaceKey || get().loadingPageIds.includes(pageId)) return
+
+    const current = findPageNode(pageTrees[activeSpaceKey] ?? [], pageId)
+    if (!current) return
+
+    const loadedIds = get().selectedSubtreePageIds[pageId] ?? collectPageNodes(current).map((node) => node.id)
+    if (selectedPageIds.includes(pageId)) {
+      set((state) => {
+        const nextTitles = { ...state.selectedPageTitles }
+        const nextSubtreePageIds = { ...state.selectedSubtreePageIds }
+        loadedIds.forEach((id) => delete nextTitles[id])
+        delete nextSubtreePageIds[pageId]
+        return {
+          selectedPageIds: state.selectedPageIds.filter((id) => !loadedIds.includes(id)),
+          selectedPageTitles: nextTitles,
+          selectedSubtreePageIds: nextSubtreePageIds,
+        }
+      })
+      return
+    }
+
+    set((state) => ({
+      loadingPageIds: [...state.loadingPageIds, pageId],
+      error: null,
+      errorCode: null,
+    }))
+
+    try {
+      const subtree = [current, ...await api.getPageDescendants(pageId)]
+      set((state) => ({
+        selectedPageIds: [...new Set([...state.selectedPageIds, ...subtree.map((node) => node.id)])],
+        selectedPageTitles: {
+          ...state.selectedPageTitles,
+          ...Object.fromEntries(subtree.map((node) => [node.id, node.title])),
+        },
+        selectedSubtreePageIds: {
+          ...state.selectedSubtreePageIds,
+          [pageId]: subtree.map((node) => node.id),
+        },
+        loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
+      }))
+    } catch (err) {
+      set((state) => ({
+        ...setSelectionError(err),
+        loadingPageIds: state.loadingPageIds.filter((id) => id !== pageId),
+      }))
     }
   },
 
@@ -108,6 +208,7 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
     set({
       selectedPageIds: [],
       selectedPageTitles: {},
+      selectedSubtreePageIds: {},
     }),
 
   setSearchQuery: (query) => set({ searchQuery: query }),

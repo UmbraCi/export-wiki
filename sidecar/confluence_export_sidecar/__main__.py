@@ -7,7 +7,7 @@ import sys
 
 from confluence_export_sidecar.confluence_client import ConfluenceClient
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
-from confluence_export_sidecar.exporter import export_single_page_migration_package
+from confluence_export_sidecar.exporter import export_migration_package
 from confluence_export_sidecar.log import get_logger
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
@@ -32,7 +32,7 @@ def _dispatch(req: dict) -> dict:
     if req_type == "ping":
         return success_response(request_id, {"status": "ok"})
 
-    if req_type in {"get_spaces", "get_page_tree", "get_current_user", "search_pages"}:
+    if req_type in {"get_spaces", "get_page_tree", "get_page_children", "get_page_descendants", "get_current_user", "search_pages"}:
         auth = payload.get("auth")
         if not auth:
             return _error_response(request_id, "auth payload is required")
@@ -48,6 +48,22 @@ def _dispatch(req: dict) -> dict:
                 return success_response(
                     request_id,
                     {"pages": client.fetch_page_tree(str(space_key))},
+                )
+            if req_type == "get_page_children":
+                page_id = payload.get("page_id")
+                if not page_id:
+                    return _error_response(request_id, "page_id is required")
+                return success_response(
+                    request_id,
+                    {"pages": client.fetch_page_children(str(page_id))},
+                )
+            if req_type == "get_page_descendants":
+                page_id = payload.get("page_id")
+                if not page_id:
+                    return _error_response(request_id, "page_id is required")
+                return success_response(
+                    request_id,
+                    {"pages": client.fetch_page_descendants(str(page_id))},
                 )
             if req_type == "search_pages":
                 query = payload.get("query")
@@ -88,17 +104,20 @@ def _dispatch(req: dict) -> dict:
 
     if req_type == "export_migration_package":
         auth = payload.get("auth")
-        page_id = payload.get("page_id")
+        page_ids = payload.get("page_ids") or []
         output_dir = payload.get("output_dir")
         if not auth:
             return _error_response(request_id, "auth payload is required")
-        if not page_id:
-            return _error_response(request_id, "page_id is required")
+        if not page_ids:
+            return _error_response(request_id, "page_ids is required")
         if not output_dir:
             return _error_response(request_id, "output_dir is required")
         try:
-            package_path = export_single_page_migration_package(
-                page_id=str(page_id), auth=auth, output_dir=str(output_dir),
+            package_path = export_migration_package(
+                page_ids=[str(page_id) for page_id in page_ids],
+                auth=auth,
+                output_dir=str(output_dir),
+                flatten=bool(payload.get("flatten", True)),
             )
             return success_response(request_id, {"package_path": package_path})
         except Exception as exc:  # noqa: BLE001

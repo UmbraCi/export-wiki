@@ -50,6 +50,8 @@ pub struct PageNode {
     pub title: String,
     pub parent_id: Option<String>,
     pub children: Vec<PageNode>,
+    pub children_loaded: bool,
+    pub has_children: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -69,7 +71,7 @@ pub struct ConfluenceUrlTarget {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ExportFormat {
     Markdown,
     Html,
@@ -83,6 +85,31 @@ pub struct ExportOptions {
     pub output_dir: String,
     pub format: ExportFormat,
     pub include_attachments: bool,
+    #[serde(default = "default_flatten")]
+    pub flatten: bool,
+}
+
+fn default_flatten() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExportOptions;
+
+    #[test]
+    fn accepts_frontend_migration_package_format() {
+        let options: ExportOptions = serde_json::from_value(serde_json::json!({
+            "pageIds": ["123"],
+            "outputDir": "/tmp/export",
+            "format": "migration_package",
+            "includeAttachments": false,
+            "flatten": true,
+        }))
+        .expect("frontend migration package format should deserialize");
+
+        assert_eq!(options.page_ids, ["123"]);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

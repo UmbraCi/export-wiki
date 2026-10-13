@@ -8,6 +8,7 @@ import sys
 from typing import Any
 from urllib.parse import urlparse
 
+import requests
 from atlassian import Confluence
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -24,6 +25,18 @@ def _cookie_names(cookie_header: str) -> list[str]:
         if name:
             names.append(name)
     return names
+
+
+def _cookie_values(cookie_header: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_cookie_pair in cookie_header.split(";"):
+        cookie_pair = raw_cookie_pair.strip()
+        if "=" not in cookie_pair:
+            continue
+        name, value = cookie_pair.split("=", 1)
+        if name.strip():
+            values[name.strip()] = value.strip()
+    return values
 
 
 def normalize_instance_url(base_url: str) -> str:
@@ -54,13 +67,16 @@ def normalize_spaces(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def normalize_page_node(raw: dict[str, Any]) -> dict[str, Any]:
-    children = raw.get("children") or []
+    raw_children = raw.get("children")
+    children = raw_children or []
     parent_id = raw.get("parent_id", raw.get("parentId"))
     return {
         "id": str(raw.get("id", "")),
         "title": raw.get("title", ""),
         "parentId": parent_id,
         "children": [normalize_page_node(child) for child in children],
+        "childrenLoaded": raw.get("childrenLoaded", raw_children is not None),
+        "hasChildren": raw.get("hasChildren", bool(children)),
     }
 
 
@@ -128,9 +144,9 @@ class ConfluenceClient:
 
         cookie = self._auth.get("cookie") or ""
         if method in {"cookie", "sso"} and cookie:
-            client = Confluence(url=wiki_url, cloud=cloud)
-            client.session.headers["Cookie"] = cookie
-            return client
+            session = requests.Session()
+            session.cookies.update(_cookie_values(cookie))
+            return Confluence(url=wiki_url, session=session, cloud=cloud)
 
         raise ValueError(f"Unsupported or incomplete auth method: {method!r}")
 
@@ -169,8 +185,52 @@ class ConfluenceClient:
         if homepage_id is None:
             return []
 
-        root = self._build_page_node(str(homepage_id), None)
+        root = self._build_page_node(
+            str(homepage_id),
+            None,
+            str(homepage.get("title") or ""),
+        )
         return normalize_page_tree([root])
+
+    def fetch_page_children(self, page_id: str) -> list[dict[str, Any]]:
+        return normalize_page_tree(self._fetch_child_nodes(page_id))
+
+    def fetch_page_descendants(self, page_id: str) -> list[dict[str, Any]]:
+        """Fetch every descendant in paged CQL results instead of walking children."""
+        if not page_id.isdecimal():
+            raise ValueError("page_id must be numeric")
+
+        cql = f"ancestor = {page_id} AND type = page"
+        descendants: list[dict[str, Any]] = []
+        start = 0
+
+        while True:
+            response = self._client.cql(cql, start=start, limit=250)
+            batch = response.get("results", [])
+            descendants.extend(batch)
+            next_start = start + len(batch)
+            total_size = response.get("totalSize")
+            if not batch or (total_size is not None and next_start >= int(total_size)):
+                break
+            if total_size is None and not response.get("_links", {}).get("next"):
+                break
+            start = next_start
+
+        return normalize_page_tree(
+            [
+                {
+                    "id": str(content["id"]),
+                    "title": content.get("title", page.get("title", "")),
+                    "parent_id": None,
+                    "children": [],
+                    "childrenLoaded": True,
+                    "hasChildren": False,
+                }
+                for page in descendants
+                for content in [page.get("content") or page]
+                if content.get("id") is not None
+            ]
+        )
 
     def search_pages(self, query: str, limit: int = 25) -> list[dict[str, Any]]:
         trimmed = query.strip()
@@ -226,23 +286,39 @@ class ConfluenceClient:
             "accountId": user.get("accountId") or user.get("account_id") or "",
         }
 
-    def _build_page_node(self, page_id: str, parent_id: str | None) -> dict[str, Any]:
-        page = self._client.get_page_by_id(page_id, expand="title")
+    def _build_page_node(
+        self,
+        page_id: str,
+        parent_id: str | None,
+        title: str,
+    ) -> dict[str, Any]:
+        children = self._fetch_child_nodes(page_id)
+
+        return {
+            "id": str(page_id),
+            "title": title,
+            "parent_id": parent_id,
+            "children": children,
+            "childrenLoaded": True,
+            "hasChildren": bool(children),
+        }
+
+    def _fetch_child_nodes(self, page_id: str) -> list[dict[str, Any]]:
         children_raw = self._client.get_page_child_by_type(page_id, type="page", limit=250)
         if isinstance(children_raw, dict):
             child_items = children_raw.get("results", [])
         else:
             child_items = children_raw or []
 
-        children = [
-            self._build_page_node(str(child.get("id")), page_id)
+        return [
+            {
+                "id": str(child.get("id")),
+                "title": child.get("title", ""),
+                "parent_id": page_id,
+                "children": [],
+                "childrenLoaded": False,
+                "hasChildren": True,
+            }
             for child in child_items
             if child.get("id") is not None
         ]
-
-        return {
-            "id": str(page_id),
-            "title": page.get("title", ""),
-            "parent_id": parent_id,
-            "children": children,
-        }

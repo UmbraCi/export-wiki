@@ -22,6 +22,8 @@ export const api = {
   logout: () => invoke<AuthStatus>('logout'),
   getSpaces: () => invoke<SpaceInfo[]>('get_spaces'),
   getPageTree: (spaceKey: string) => invoke<PageNode[]>('get_page_tree', { spaceKey }),
+  getPageChildren: (pageId: string) => invoke<PageNode[]>('get_page_children', { pageId }),
+  getPageDescendants: (pageId: string) => invoke<PageNode[]>('get_page_descendants', { pageId }),
   searchPages: (query: string) => invoke<SearchResult[]>('search_pages', { query }),
   parseConfluenceUrl: (url: string) =>
     invoke<ConfluenceUrlTarget>('parse_confluence_url_command', { url }),

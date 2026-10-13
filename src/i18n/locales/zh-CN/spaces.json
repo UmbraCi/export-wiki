@@ -16,13 +16,18 @@
   "spaces": {
     "title": "空间",
     "viewing": "正在查看 {{spaceKey}}",
-    "select": "请选择一个空间"
+    "select": "请选择一个空间",
+    "searchLabel": "筛选空间",
+    "searchPlaceholder": "按名称或 Key 筛选",
+    "none": "未找到匹配的空间"
   },
   "pages": {
     "title": "页面",
     "selectedInSpace": "在 {{spaceKey}} 中已选 {{count}} 个",
     "selectSpace": "请选择空间以浏览页面",
-    "selectAria": "选择 {{title}}"
+    "selectAria": "选择 {{title}}",
+    "expandAria": "展开 {{title}}",
+    "collapseAria": "收起 {{title}}"
   },
   "selected": {
     "title": "已选页面",

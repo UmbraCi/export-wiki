@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Input as UiInput } from '../ui/input'
 
 interface InputProps {
   label?: string
@@ -29,13 +30,13 @@ function Input({
         </label>
       )}
       <div className="relative">
-        <input
+        <UiInput
           type={type}
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
           disabled={disabled}
-          className={`w-full px-4 py-3 rounded-xl text-sm text-text-primary bg-bg-card border transition-all duration-200 input-app ${
+          className={`input-app ${
             suffix ? 'pr-12' : ''
           } ${
             error

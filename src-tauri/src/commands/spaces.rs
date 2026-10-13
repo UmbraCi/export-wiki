@@ -13,6 +13,10 @@ struct SidecarPageNode {
     title: String,
     parent_id: Option<String>,
     children: Vec<SidecarPageNode>,
+    #[serde(default)]
+    children_loaded: bool,
+    #[serde(default)]
+    has_children: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +83,8 @@ fn map_page_node(node: SidecarPageNode) -> PageNode {
         title: node.title,
         parent_id: node.parent_id,
         children: node.children.into_iter().map(map_page_node).collect(),
+        children_loaded: node.children_loaded,
+        has_children: node.has_children,
     }
 }
 
@@ -180,6 +186,30 @@ pub async fn get_page_tree(
     let auth = require_sidecar_auth(&state)?;
     let client = SidecarClient::resolve_default()?;
     let response = client.get_page_tree(&auth, &space_key).await?;
+
+    map_page_tree_from_payload(&response.payload)
+}
+
+#[tauri::command]
+pub async fn get_page_children(
+    page_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<PageNode>, String> {
+    let auth = require_sidecar_auth(&state)?;
+    let client = SidecarClient::resolve_default()?;
+    let response = client.get_page_children(&auth, &page_id).await?;
+
+    map_page_tree_from_payload(&response.payload)
+}
+
+#[tauri::command]
+pub async fn get_page_descendants(
+    page_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<PageNode>, String> {
+    let auth = require_sidecar_auth(&state)?;
+    let client = SidecarClient::resolve_default()?;
+    let response = client.get_page_descendants(&auth, &page_id).await?;
 
     map_page_tree_from_payload(&response.payload)
 }

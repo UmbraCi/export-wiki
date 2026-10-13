@@ -109,6 +109,36 @@ impl SidecarClient {
         .await
     }
 
+    pub async fn get_page_children(
+        &self,
+        auth: &SidecarAuthConfig,
+        page_id: &str,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "get_page_children",
+            json!({
+                "auth": auth_payload(auth),
+                "page_id": page_id,
+            }),
+        )
+        .await
+    }
+
+    pub async fn get_page_descendants(
+        &self,
+        auth: &SidecarAuthConfig,
+        page_id: &str,
+    ) -> Result<SidecarResponse, String> {
+        self.request(
+            "get_page_descendants",
+            json!({
+                "auth": auth_payload(auth),
+                "page_id": page_id,
+            }),
+        )
+        .await
+    }
+
     pub async fn search_pages(
         &self,
         auth: &SidecarAuthConfig,
@@ -154,15 +184,17 @@ impl SidecarClient {
     pub async fn export_migration_package(
         &self,
         auth: &SidecarAuthConfig,
-        page_id: &str,
+        page_ids: &[String],
         output_dir: &str,
+        flatten: bool,
     ) -> Result<SidecarResponse, String> {
         self.request(
             "export_migration_package",
             json!({
                 "auth": auth_payload(auth),
-                "page_id": page_id,
+                "page_ids": page_ids,
                 "output_dir": output_dir,
+                "flatten": flatten,
             }),
         )
         .await

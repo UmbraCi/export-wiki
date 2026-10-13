@@ -18,6 +18,12 @@
     "html": "HTML (.html)",
     "migration_package": "Outline migration package (.zip)"
   },
+  "migration": {
+    "flatten": {
+      "label": "Flatten import",
+      "description": "When enabled, all pages go into one folder; otherwise they are grouped by the first level of the selected subtree."
+    }
+  },
   "button": {
     "export_one": "Export {{count}} Page",
     "export_other": "Export {{count}} Pages"
