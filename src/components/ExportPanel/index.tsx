@@ -43,7 +43,6 @@ function ExportPanel() {
     resolver: zodResolver(exportFormSchema),
     values: options,
   })
-  const format = form.watch('format')
   const outputDir = form.watch('outputDir')
   const canExport =
     selectedPageIds.length > 0 && outputDir.trim().length > 0 && !isExporting
@@ -105,11 +104,7 @@ function ExportPanel() {
             </Field>
             <Controller
               control={form.control}
-              name={
-                format === 'migration_package'
-                  ? 'flatten'
-                  : 'includeAttachments'
-              }
+              name="includeAttachments"
               render={({ field }) => (
                 <Field orientation="horizontal">
                   <Switch
@@ -122,18 +117,10 @@ function ExportPanel() {
                   />
                   <FieldContent>
                     <FieldLabel htmlFor="export-attachments">
-                      {t(
-                        format === 'migration_package'
-                          ? 'export:migration.flatten.label'
-                          : 'export:attachments.label',
-                      )}
+                      {t('export:attachments.label')}
                     </FieldLabel>
                     <FieldDescription id="export-attachments-description">
-                      {t(
-                        format === 'migration_package'
-                          ? 'export:migration.flatten.description'
-                          : 'export:attachments.description',
-                      )}
+                      {t('export:attachments.description')}
                     </FieldDescription>
                   </FieldContent>
                 </Field>

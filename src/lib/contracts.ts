@@ -63,7 +63,6 @@ export interface ExportOptions {
   outputDir: string
   format: ExportFormat
   includeAttachments: boolean
-  flatten: boolean
 }
 
 export interface ExportStats {

@@ -6,6 +6,7 @@
     "tagline": "Confluence Publisher"
   },
   "nav": {
+    "logs": "Logs",
     "breadcrumb": "Current location",
     "authentication": "Authentication",
     "spaces": "Spaces",

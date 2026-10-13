@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { initSsoEventListeners, useAuthStore } from './stores/authStore'
 import { useConfigStore } from './stores/configStore'
 import { authRequiredViews, useNavStore } from './stores/navStore'
+import SpaceBrowserFooter from './components/SpaceBrowser/Footer'
 
 const AuthPanel = lazy(() => import('./components/AuthPanel'))
 const SpaceBrowser = lazy(() => import('./components/SpaceBrowser'))
@@ -12,6 +13,7 @@ const ContentPreview = lazy(() => import('./components/ContentPreview'))
 const ExportPanel = lazy(() => import('./components/ExportPanel'))
 const ProgressPanel = lazy(() => import('./components/ProgressPanel'))
 const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
+const LogPanel = lazy(() => import('./components/LogPanel'))
 
 function App() {
   const { t } = useTranslation('common')
@@ -45,6 +47,7 @@ function App() {
     if (activeView === 'settings') {
       return <SettingsPanel />
     }
+    if (activeView === 'logs') return <LogPanel />
 
     if (!status.authenticated) {
       return <AuthPanel />
@@ -75,7 +78,13 @@ function App() {
   }
 
   return (
-    <Layout>
+    <Layout
+      footer={
+        status.authenticated && activeView === 'spaces' ? (
+          <SpaceBrowserFooter />
+        ) : undefined
+      }
+    >
       <Suspense
         fallback={
           <Spinner className="mx-auto size-6" aria-label={t('loading')} />

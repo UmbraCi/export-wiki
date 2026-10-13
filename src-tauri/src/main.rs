@@ -52,6 +52,7 @@ fn main() {
             commands::spaces::parse_confluence_url_command,
             commands::export::export_pages,
             commands::export::cancel_export,
+            commands::export::save_log_file,
             commands::config::load_config,
             commands::config::save_config,
         ])

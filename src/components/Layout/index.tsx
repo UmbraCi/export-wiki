@@ -3,9 +3,10 @@ import Header from '../Header'
 
 interface LayoutProps {
   children: React.ReactNode
+  footer?: React.ReactNode
 }
 
-function Layout({ children }: LayoutProps) {
+function Layout({ children, footer }: LayoutProps) {
   return (
     <div className="flex h-screen bg-muted font-sans">
       {/* Sidebar */}
@@ -17,6 +18,7 @@ function Layout({ children }: LayoutProps) {
         <main className="relative flex-1 min-h-0 overflow-auto px-6 py-8">
           {children}
         </main>
+        {footer}
       </div>
     </div>
   )

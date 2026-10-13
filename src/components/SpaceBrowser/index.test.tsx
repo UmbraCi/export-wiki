@@ -16,7 +16,8 @@ import { useConfigStore } from '../../stores/configStore'
 import { useNavStore } from '../../stores/navStore'
 import i18n from '../../i18n'
 import ExportPanel from '../ExportPanel'
-import SpaceBrowser from './index'
+import SpaceBrowserContent from './index'
+import SpaceBrowserFooter from './Footer'
 import App from '../../App'
 
 vi.mock('../../lib/api', () => ({
@@ -27,6 +28,10 @@ vi.mock('../../lib/api', () => ({
     exportPages: vi.fn(),
   },
 }))
+
+function SpaceBrowser() {
+  return <><SpaceBrowserContent /><SpaceBrowserFooter /></>
+}
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }))
 vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'system', setTheme: vi.fn() }),
@@ -89,6 +94,21 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+it('exports an Outline Markdown ZIP with attachments and no flatten option', async () => {
+  useSelectionStore.setState({ selectedPageIds: ['root'] })
+  render(<ExportPanel />)
+  fireEvent.click(screen.getByRole('radio', { name: 'Outline migration package (.zip)' }))
+  expect(screen.queryByText('Flatten import')).toBeNull()
+  expect(screen.getByRole('switch', { name: 'Include Attachments' }).getAttribute('aria-checked')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: 'Export 1 Page' }))
+  await waitFor(() => expect(api.exportPages).toHaveBeenCalledWith({
+    pageIds: ['root'],
+    outputDir: '/tmp/export-wiki-selection-test',
+    format: 'migration_package',
+    includeAttachments: true,
+  }))
+})
+
 it('opens export as a space subpage and preserves selection and tree expansion on return', async () => {
   useAuthStore.setState({
     status: {
@@ -105,7 +125,7 @@ it('opens export as a space subpage and preserves selection and tree expansion o
   expect(screen.queryByRole('button', { name: 'Export' })).toBeNull()
   const next = await screen.findByRole('button', { name: 'Next' })
   expect(next.hasAttribute('disabled')).toBe(true)
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Select root' }))
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Select root' }))
   await waitFor(() => expect(next.hasAttribute('disabled')).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Expand root' }))
   fireEvent.click(next)

@@ -9,7 +9,7 @@ from confluence_export_sidecar.confluence_client import AuthenticationRequired, 
 from requests import HTTPError
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
 from confluence_export_sidecar.exporter import export_migration_package
-from confluence_export_sidecar.log import get_logger
+from confluence_export_sidecar.log import get_logger, set_log_secrets, redact_log_message
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
 log = get_logger(__name__)
@@ -44,13 +44,14 @@ def _exception_response(request_id: str, exc: Exception) -> dict:
         isinstance(exc, HTTPError) and exc.response is not None and exc.response.status_code == 401
     ):
         return _error_response(request_id, json.dumps({"code": "AUTH_REQUIRED"}, separators=(",", ":")))
-    return _error_response(request_id, str(exc))
+    return _error_response(request_id, redact_log_message(str(exc)))
 
 
 def _dispatch(req: dict) -> dict:
     req_type = req["type"]
     request_id = str(req["request_id"])
     payload = req.get("payload") or {}
+    set_log_secrets(payload.get("auth") or {})
 
     if req_type == "ping":
         return success_response(request_id, {"status": "ok"})
@@ -123,6 +124,7 @@ def _dispatch(req: dict) -> dict:
             )
             return success_response(request_id, {"pages": pages})
         except Exception as exc:  # noqa: BLE001
+            log.exception("page export failed")
             return _exception_response(request_id, exc)
 
     if req_type == "export_migration_package":
@@ -136,14 +138,15 @@ def _dispatch(req: dict) -> dict:
         if not output_dir:
             return _error_response(request_id, "output_dir is required")
         try:
-            package_path = export_migration_package(
+            package = export_migration_package(
                 page_ids=[str(page_id) for page_id in page_ids],
                 auth=auth,
                 output_dir=str(output_dir),
-                flatten=bool(payload.get("flatten", True)),
+                include_attachments=bool(payload.get("include_attachments", True)),
             )
-            return success_response(request_id, {"package_path": package_path})
+            return success_response(request_id, package)
         except Exception as exc:  # noqa: BLE001
+            log.exception("migration package export failed")
             return _exception_response(request_id, exc)
 
     return _error_response(request_id, f"unsupported type {req_type!r}")

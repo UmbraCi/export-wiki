@@ -21,7 +21,7 @@ The UI supports **English** and **Simplified Chinese**.
 | **Authentication**      | SSO via embedded browser window, plus manual fallback with API token or session cookie |
 | **Space browser**       | List spaces, browse page trees, multi-select pages for export                          |
 | **Search & navigation** | Search pages by title; open a page directly from a Confluence URL                      |
-| **Export formats**      | Markdown (`.md`) or HTML (`.html`)                                                     |
+| **Export formats**      | Markdown (`.md`), HTML (`.html`), or a hierarchical Outline Markdown ZIP                |
 | **Attachments**         | Download images and files into a local `attachments/` folder                           |
 | **Incremental export**  | Skip pages unchanged since the last run                                                |
 | **Background sync**     | Periodically re-export selected pages while the app is open (opt-in)                   |
@@ -81,6 +81,10 @@ Other useful scripts:
 4. **Export** — Choose output directory, format, and attachment options, then start export.
 5. **Settings** — Configure skip-unchanged, background sync, language, and theme.
 
+The Outline ZIP contains UTF-8 Markdown grouped by Confluence space, with the original page ancestry. A parent page's `Guide.md` sits beside `Guide/`, which holds its child pages. Titles are written to YAML `title` so body headings do not override them. Selected-page links and bundled attachment links are relative to each document; links to pages outside the selection remain Confluence links. Enable **Include Attachments** to bundle referenced images and files. Duplicate sibling titles and attachment filenames are disambiguated, and attachment download failures stop publication. There are no manifest, report, HTML, or XML files and no flatten option.
+
+Import this ZIP through the target knowledge base's Markdown ZIP import. Its importer determines the final parent documents and internal references; no Heytea folder metadata is emitted. Loose Markdown at the ZIP root is also valid for importers that group it under `Documents`.
+
 ### Authentication Notes
 
 - **SSO**: A secure login window opens for IdP sign-in. After the wiki session is detected, the app connects automatically.
@@ -116,7 +120,7 @@ Export Wiki 是一款基于 **Tauri 2** 的跨平台桌面应用，用于连接 
 | **认证登录**   | 嵌入式浏览器 SSO 登录；也支持 API 令牌或会话 Cookie 手动登录 |
 | **空间浏览**   | 列出空间、浏览页面树、多选待导出页面                         |
 | **搜索与导航** | 按标题搜索页面；粘贴 Confluence URL 直接定位页面             |
-| **导出格式**   | Markdown（`.md`）或 HTML（`.html`）                          |
+| **导出格式**   | Markdown（`.md`）、HTML（`.html`）或保留层级的 Outline Markdown ZIP |
 | **附件下载**   | 将图片与文件保存到本地 `attachments/` 目录                   |
 | **增量导出**   | 跳过自上次导出以来未修改的页面                               |
 | **后台同步**   | 应用打开时可定时重新导出已选页面（默认关闭，需手动开启）     |
@@ -175,6 +179,10 @@ npm run build:mvp
 3. **选择** — 勾选需要导出的页面。
 4. **导出** — 设置输出目录、格式与附件选项，开始导出。
 5. **设置** — 配置跳过未变更页面、后台同步、语言与主题等。
+
+**Outline 迁移包**是普通 Markdown ZIP：按 Confluence 空间及页面祖先保留层级，父页面的 `使用指南.md` 与承载子页面的 `使用指南/` 并列。正文和 ZIP 内文件名使用 UTF-8；每页写入 YAML `title`，保证标题优先于正文的一级标题。所选页面间及附件链接改为相对路径，未选页面的链接保留为 Confluence 地址。开启「包含附件」会一起打包引用的图片与文件；重名页面、附件会区分命名，附件下载失败则不发布新包。包内不含清单、报告、HTML 或 XML，也没有扁平化选项。
+
+请在目标知识库使用 Markdown ZIP 导入入口。包内目录供导入器还原父子文档，不包含喜茶文件夹元数据；根目录直接放 Markdown 的包也兼容归入 `Documents` 父文档的导入规则。
 
 ### 认证说明
 

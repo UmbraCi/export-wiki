@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppView = 'authentication' | 'spaces' | 'export' | 'settings'
+export type AppView = 'authentication' | 'spaces' | 'export' | 'settings' | 'logs'
 
 interface NavState {
   activeView: AppView

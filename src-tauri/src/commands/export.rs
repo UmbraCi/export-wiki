@@ -8,11 +8,11 @@ use uuid::Uuid;
 use crate::app_error::{self, codes, AppError};
 use crate::auth::SecretStore;
 use crate::contracts::{ExportFormat, ExportOptions, ExportProgressEvent, ExportStats};
-use crate::export::file_writer::{ExportedAttachment, ExportedPage, write_exported_page};
-use crate::sidecar::client::SidecarClient;
+use crate::export::file_writer::{write_exported_page, ExportedAttachment, ExportedPage};
+use crate::sidecar::client::{SidecarClient, SidecarLog};
 use crate::state::AppState;
 
-use serde_json::json;
+use serde_json::{json, Value};
 
 const EMPTY_SELECTION: &str = codes::EMPTY_SELECTION;
 
@@ -126,6 +126,9 @@ pub async fn export_pages(
     let auth = require_sidecar_auth(&state)?;
     state.export_cancelled.store(false, Ordering::SeqCst);
     let client = SidecarClient::resolve_default()?;
+    let on_log = |entry: SidecarLog| {
+        let _ = app.emit_to("main", "export-log", entry);
+    };
     let export_id = Uuid::new_v4().to_string();
     let total = options.page_ids.len() as u32;
     let output_dir = PathBuf::from(&options.output_dir);
@@ -154,13 +157,14 @@ pub async fn export_pages(
                 message: None,
             },
         )?;
-        client
+        let response = client
             .export_migration_package_with_cancel(
                 &auth,
                 &options.page_ids,
                 &options.output_dir,
-                options.flatten,
+                options.include_attachments,
                 &state.export_cancelled,
+                &on_log,
             )
             .await
             .map_err(|error| {
@@ -174,15 +178,20 @@ pub async fn export_pages(
             return Err(AppError::new(codes::EXPORT_CANCELLED).into_invoke_error());
         }
         stats.exported = total;
+        stats.attachments = response
+            .payload
+            .get("attachments")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as u32;
         emit_progress(
             &app,
             ExportProgressEvent {
                 page_id: None,
                 status: "complete".into(),
                 progress: 100,
-                stats,
+                stats: stats.clone(),
                 message_key: Some("export.complete".into()),
-                message_params: Some(json!({ "exported": total, "failed": 0, "attachments": 0 })),
+                message_params: Some(json!({ "exported": total, "failed": 0, "attachments": stats.attachments })),
                 message: None,
             },
         )?;
@@ -209,6 +218,7 @@ pub async fn export_pages(
             format,
             options.include_attachments,
             &state.export_cancelled,
+            &on_log,
         )
         .await
         .map_err(|error| {
@@ -298,6 +308,14 @@ pub fn cancel_export(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn save_log_file(window: tauri::Window, path: String, contents: String) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Log files can only be saved from the main window".into());
+    }
+    std::fs::write(path, contents).map_err(|error| format!("save log file: {error}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,7 +356,10 @@ mod tests {
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].filename, "Home.md");
         assert_eq!(pages[0].markdown.as_deref(), Some("# Home\n"));
-        assert_eq!(pages[0].attachments[0].relative_path, "attachments/diagram.png");
+        assert_eq!(
+            pages[0].attachments[0].relative_path,
+            "attachments/diagram.png"
+        );
     }
 
     #[test]

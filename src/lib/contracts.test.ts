@@ -8,7 +8,6 @@ describe('shared frontend contracts', () => {
       outputDir: '/tmp/export-wiki',
       format: 'markdown',
       includeAttachments: true,
-      flatten: true,
     }
 
     expect(options.format).toBe('markdown')
@@ -20,19 +19,17 @@ describe('shared frontend contracts', () => {
       outputDir: '/tmp/export-wiki',
       format: 'html',
       includeAttachments: false,
-      flatten: true,
     }
 
     expect(options.format).toBe('html')
   })
 
-  it('allows a flattened multi-page migration package', () => {
+  it('allows a hierarchical multi-page migration package', () => {
     const options: ExportOptions = {
       pageIds: ['123', '456'],
       outputDir: '/tmp/export-wiki',
       format: 'migration_package',
       includeAttachments: false,
-      flatten: true,
     }
 
     expect(options.format).toBe('migration_package')

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { useExportStore, ExportLogEntry } from '../../stores/exportStore'
+import { useExportStore } from '../../stores/exportStore'
+import LogPanel from '../LogPanel'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -13,14 +14,13 @@ function ProgressPanel() {
     isCancelling,
     progress,
     stats,
-    logs,
     error,
     reset,
     stopExport,
   } = useExportStore()
 
   return (
-    <div className="max-w-xl mx-auto mt-6">
+    <div className="max-w-4xl mx-auto mt-6">
       <Card className="gap-0 py-0">
         <div className="px-8 py-6 border-b border-border">
           <h2 className="font-sans text-xl font-semibold text-foreground">
@@ -77,24 +77,7 @@ function ProgressPanel() {
             </Alert>
           )}
 
-          <div className="rounded-xl bg-muted overflow-hidden">
-            <div className="px-4 py-3 border-b border-border text-xs font-medium text-muted-foreground uppercase">
-              {t('export:progress.logTitle')}
-            </div>
-            <div className="h-48 overflow-y-auto p-4 bg-card">
-              {logs.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  {t('export:progress.emptyLog')}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {logs.map((log, index) => (
-                    <LogEntry key={`${log.timestamp}-${index}`} entry={log} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <LogPanel />
         </div>
 
         <div className="px-8 py-6 bg-muted border-t border-border flex justify-end gap-3">
@@ -142,20 +125,6 @@ function Stat({
         {value}
       </span>
       <span className="block text-xs text-muted-foreground mt-1">{label}</span>
-    </div>
-  )
-}
-
-function LogEntry({ entry }: { entry: ExportLogEntry }) {
-  const colors: Record<string, string> = {
-    info: 'text-muted-foreground',
-    warn: 'text-amber-700 dark:text-amber-400',
-    error: 'text-destructive',
-  }
-  return (
-    <div className={`text-xs ${colors[entry.level]}`}>
-      <span className="text-muted-foreground mr-2">{entry.timestamp}</span>
-      <span className="text-foreground">{entry.message}</span>
     </div>
   )
 }

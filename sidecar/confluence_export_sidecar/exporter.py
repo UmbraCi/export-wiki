@@ -7,6 +7,7 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from confluence_markdown_exporter.api_clients import (
     ApiClientFactory,
@@ -23,12 +24,18 @@ from confluence_markdown_exporter.utils.app_data_store import (
 from pydantic import SecretStr
 
 from confluence_export_sidecar.log import get_logger
-from confluence_export_sidecar.migration_package import (
-    publish_flat_migration_package,
-    publish_single_page_package,
-)
+from confluence_export_sidecar.migration_package import publish_markdown_package
 
 log = get_logger(__name__)
+
+
+def _log_response(response: Any, *_args: Any, **_kwargs: Any) -> Any:
+    (log.debug if response.ok else log.warning)(
+        "HTTP %s %s → %s (%.0f ms)",
+        response.request.method, urlsplit(response.url).path,
+        response.status_code, response.elapsed.total_seconds() * 1000,
+    )
+    return response
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _WINDOWS_RESERVED = {
@@ -83,12 +90,13 @@ def _wiki_base_url(auth: dict[str, Any]) -> str:
     return base_url
 
 
-def _configure_cme(auth: dict[str, Any], include_attachments: bool) -> str:
+def _configure_cme(auth: dict[str, Any], include_attachments: bool, *, migration: bool = False) -> str:
     base_url = normalize_instance_url(_wiki_base_url(auth))
     export_config = ExportConfig(
         output_path=Path(tempfile.gettempdir()) / "cme-sidecar-export",
-        page_path="{page_title}.md",
-        attachment_path="attachments/{attachment_title}{attachment_extension}",
+        page_path="{page_id}.md" if migration else "{page_title}.md",
+        attachment_path=("attachments/{attachment_id}{attachment_extension}" if migration
+                         else "attachments/{attachment_title}{attachment_extension}"),
         attachment_href="relative",
         attachments_export="referenced" if include_attachments else "disabled",
         skip_unchanged=False,
@@ -123,6 +131,7 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool) -> str:
         base_url,
         confluence_auth[base_url],
     )
+    client.session.hooks.setdefault("response", []).append(_log_response)
     if not hasattr(_thread_local, "clients"):
         _thread_local.clients = {}
     _thread_local.clients[base_url] = client
@@ -130,6 +139,7 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool) -> str:
 
 
 def _download_attachment_content(attachment: Any, base_url: str) -> bytes | None:
+    log.info("downloading attachment: %s", attachment.filename)
     client = get_thread_confluence(base_url)
     try:
         response = client.request(
@@ -185,10 +195,12 @@ def export_page(
     """Export one Confluence page to Markdown or HTML and attachment manifests."""
     log.info("exporting page_id=%s format=%s attachments=%s", page_id, export_format, include_attachments)
     base_url = _configure_cme(auth, include_attachments)
+    log.info("fetching page_id=%s", page_id)
     page = Page.from_id(int(page_id), base_url)
     if page.title == "Page not accessible":
         raise ValueError(f"Page {page_id} is not accessible")
 
+    log.info("converting page_id=%s to %s", page_id, export_format)
     content = page.html if export_format == "html" else page.markdown
     log.info("page title=%r content_len=%d", page.title, len(content))
     raw_attachments: list[dict[str, Any]] = []
@@ -232,56 +244,40 @@ def export_pages(
     ]
 
 
-def export_single_page_migration_package(
-    *, page_id: str, auth: dict[str, Any], output_dir: str,
-) -> str:
-    """Fetch and convert one page, then publish its migration ZIP."""
-    base_url = _configure_cme(auth, include_attachments=False)
-    page = Page.from_id(int(page_id), base_url)
-    if page.title == "Page not accessible":
-        raise ValueError(f"Page {page_id} is not accessible")
-
-    return str(
-        publish_single_page_package(
-            output_dir=output_dir,
-            page={
-                "id": str(page.id),
-                "title": page.title,
-                "source_path": [*(ancestor.title for ancestor in page.ancestors), page.title],
-                "source_url": page.web_url or f"{base_url}/pages/{page.id}",
-                "version": page.version.number,
-                "storage": page.body_storage,
-                "html": page.html,
-                "markdown": page.markdown,
-            },
-        )
-    )
-
 
 def export_migration_package(
-    *, page_ids: list[str], auth: dict[str, Any], output_dir: str, flatten: bool,
-) -> str:
-    """Fetch selected pages and publish a v2 Outline migration package."""
-    base_url = _configure_cme(auth, include_attachments=False)
+    *, page_ids: list[str], auth: dict[str, Any], output_dir: str,
+    include_attachments: bool = True,
+) -> dict[str, Any]:
+    """Fetch selected pages and publish a hierarchical Markdown ZIP."""
+    base_url = _configure_cme(auth, include_attachments, migration=True)
     pages = []
     for page_id in page_ids:
+        log.info("fetching migration page_id=%s", page_id)
         page = Page.from_id(int(page_id), base_url)
         if page.title == "Page not accessible":
             raise ValueError(f"Page {page_id} is not accessible")
-        pages.append(
-            {
-                "id": str(page.id),
-                "title": page.title,
-                "source_path": [*(ancestor.title for ancestor in page.ancestors), page.title],
-                "source_url": page.web_url or f"{base_url}/pages/{page.id}",
-                "version": page.version.number,
-                "storage": page.body_storage,
-                "html": page.html,
-                "markdown": page.markdown,
-            }
-        )
-    return str(
-        publish_flat_migration_package(
-            output_dir=output_dir, pages=pages, flatten=flatten
-        )
-    )
+        attachments = []
+        if include_attachments:
+            for attachment in page._attachments_for_export():  # noqa: SLF001
+                content = _download_attachment_content(attachment, base_url)
+                if content is None:
+                    raise ValueError(f"Attachment {attachment.id} could not be downloaded")
+                attachments.append({"path": attachment.export_path.as_posix(), "title": attachment.title, "content": content})
+        log.info("converting migration page_id=%s", page_id)
+        pages.append({
+            "id": str(page.id),
+            "title": page.title,
+            "source_path": [page.space.name, *(ancestor.title for ancestor in page.ancestors), page.title],
+            "source_ids": [f"space:{page.space.key}", *(str(ancestor.id) for ancestor in page.ancestors), str(page.id)],
+            "base_url": base_url,
+            "markdown": page.markdown,
+            "attachments": attachments,
+        })
+    log.info("writing migration package (%d pages)", len(pages))
+    package_path = publish_markdown_package(output_dir=output_dir, pages=pages)
+    return {
+        "package_path": str(package_path),
+        "attachments": len({attachment["path"]
+                            for page in pages for attachment in page["attachments"]}),
+    }

@@ -35,9 +35,15 @@ const destName = `cme-sidecar-${triple}${ext}`;
 const dest = path.join(binariesDir, destName);
 
 fs.mkdirSync(binariesDir, { recursive: true });
-fs.copyFileSync(source, dest);
-if (!isWin) {
-  fs.chmodSync(dest, 0o755);
+const temporary = `${dest}.${process.pid}.tmp`;
+try {
+  fs.copyFileSync(source, temporary);
+  if (!isWin) {
+    fs.chmodSync(temporary, 0o755);
+  }
+  // Replacing the inode avoids macOS retaining the overwritten binary's code signature.
+  fs.renameSync(temporary, dest);
+} finally {
+  if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
 }
-
 console.log("Prepared sidecar binary at src-tauri/binaries/cme-sidecar");

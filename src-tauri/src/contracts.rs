@@ -87,12 +87,6 @@ pub struct ExportOptions {
     pub output_dir: String,
     pub format: ExportFormat,
     pub include_attachments: bool,
-    #[serde(default = "default_flatten")]
-    pub flatten: bool,
-}
-
-fn default_flatten() -> bool {
-    true
 }
 
 #[cfg(test)]
@@ -106,7 +100,6 @@ mod tests {
             "outputDir": "/tmp/export",
             "format": "migration_package",
             "includeAttachments": false,
-            "flatten": true,
         }))
         .expect("frontend migration package format should deserialize");
 

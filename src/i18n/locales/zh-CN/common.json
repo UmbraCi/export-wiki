@@ -6,6 +6,7 @@
     "tagline": "Confluence 发布工具"
   },
   "nav": {
+    "logs": "日志",
     "breadcrumb": "当前位置",
     "authentication": "认证",
     "spaces": "空间",

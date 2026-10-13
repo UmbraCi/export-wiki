@@ -18,12 +18,6 @@
     "html": "HTML (.html)",
     "migration_package": "Outline migration package (.zip)"
   },
-  "migration": {
-    "flatten": {
-      "label": "Flatten import",
-      "description": "When enabled, all pages go into one folder; otherwise they are grouped by the first level of the selected subtree."
-    }
-  },
   "button": {
     "export_one": "Export {{count}} Page",
     "export_other": "Export {{count}} Pages"
@@ -43,6 +37,25 @@
       "failed": "Failed",
       "files": "Files"
     }
+  },
+  "logs": {
+    "level": "Minimum level",
+    "levels": {
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warning",
+      "error": "Error"
+    },
+    "search": "Search logs",
+    "copy": "Copy",
+    "copied": "Logs copied",
+    "download": "Save logs",
+    "noMatches": "No logs match this filter",
+    "retention": "Showing {{count}} / {{total}} entries. Latest 5,000 entries kept for this session. Level only filters the display; copying and saving use the current filter.",
+    "starting": "Starting export: {{count}} pages, format={{format}}",
+    "waiting": "No new export activity for {{seconds}} seconds. The last operation may still be waiting for the server; you can stop the export.",
+    "stopping": "Cancellation requested; stopping the export process",
+    "cancelled": "Export cancelled"
   },
   "queued_one": "Queued {{count}} page for export",
   "queued_other": "Queued {{count}} pages for export",

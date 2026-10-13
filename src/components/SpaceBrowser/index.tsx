@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import type { PageNode } from '../../lib/contracts'
 import { isInvalidConfluenceUrlError } from '../../i18n/backend'
 import { useSelectionStore } from '../../stores/selectionStore'
-import { useNavStore } from '../../stores/navStore'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -20,7 +19,6 @@ import { ChevronRight } from 'lucide-react'
 
 function SpaceBrowser() {
   const { t } = useTranslation(['spaces', 'common'])
-  const setActiveView = useNavStore((state) => state.setActiveView)
   const {
     spaces,
     pageTrees,
@@ -325,17 +323,6 @@ function SpaceBrowser() {
             />
           ))}
         </Panel>
-      </div>
-      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-4 border-t border-border bg-muted py-4">
-        <p className="text-sm text-muted-foreground" role="status">
-          {t('spaces:selected.count', { count: selectedPageIds.length })}
-        </p>
-        <Button
-          onClick={() => setActiveView('export')}
-          disabled={selectedPageIds.length === 0 || loadingPageIds.length > 0}
-        >
-          {t('common:buttons.next')}
-        </Button>
       </div>
     </div>
   )

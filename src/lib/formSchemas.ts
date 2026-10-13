@@ -27,7 +27,6 @@ export const exportFormSchema = z.object({
   outputDir: required,
   format: z.enum(['markdown', 'html', 'migration_package']),
   includeAttachments: z.boolean(),
-  flatten: z.boolean(),
 })
 
 export const syncFormSchema = z.object({
