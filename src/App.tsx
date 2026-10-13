@@ -39,7 +39,7 @@ function App() {
         return <AuthPanel />
       case 'spaces':
         return <SpaceBrowser />
-      case 'pages':
+      case 'export':
         return (
           <>
             <ContentPreview />

@@ -8,7 +8,7 @@
   "nav": {
     "authentication": "Authentication",
     "spaces": "Spaces",
-    "pages": "Pages",
+    "export": "Export",
     "settings": "Settings",
     "signInFirst": "Sign in first to access this section"
   },

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppView = 'authentication' | 'spaces' | 'pages' | 'settings'
+export type AppView = 'authentication' | 'spaces' | 'export' | 'settings'
 
 interface NavState {
   activeView: AppView
@@ -12,4 +12,4 @@ export const useNavStore = create<NavState>((set) => ({
   setActiveView: (activeView) => set({ activeView }),
 }))
 
-export const authRequiredViews: AppView[] = ['spaces', 'pages']
+export const authRequiredViews: AppView[] = ['spaces', 'export']

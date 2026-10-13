@@ -10,7 +10,7 @@ function Sidebar() {
   const navItems: { view: AppView; label: string }[] = [
     { view: 'authentication', label: t('nav.authentication') },
     { view: 'spaces', label: t('nav.spaces') },
-    { view: 'pages', label: t('nav.pages') },
+    { view: 'export', label: t('nav.export') },
     { view: 'settings', label: t('nav.settings') },
   ]
 

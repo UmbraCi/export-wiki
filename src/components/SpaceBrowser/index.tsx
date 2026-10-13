@@ -369,26 +369,31 @@ function Panel({
   children: React.ReactNode
 }) {
   return (
-    <div className={`card-app flex flex-col min-h-[28rem] ${inactive ? 'opacity-60' : ''}`}>
-      <div className="px-6 py-5 border-b border-border">
-        <h3 className="font-display text-lg font-semibold text-text-primary">{title}</h3>
-        <p className="text-sm text-text-secondary mt-1">{subtitle}</p>
-        {toolbar && <div className="mt-4">{toolbar}</div>}
-        {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-      </div>
+    <details open className={`group card-app flex flex-col ${inactive ? 'opacity-60' : ''}`}>
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4 px-6 py-5 [&::-webkit-details-marker]:hidden">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-text-primary">{title}</h3>
+          <p className="text-sm text-text-secondary mt-1">{subtitle}</p>
+        </div>
+        <span className="text-text-muted transition-transform group-open:rotate-180" aria-hidden="true">⌄</span>
+      </summary>
 
-      <div className="flex-1 overflow-y-auto py-3">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <span className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : isEmpty ? (
-          <div className="text-center py-12 text-text-muted text-sm">{emptyLabel}</div>
-        ) : (
-          <div className="space-y-1 px-3">{children}</div>
-        )}
+      <div className="border-t border-border">
+        {toolbar && <div className="px-6 pt-4">{toolbar}</div>}
+        {error && <p className="px-6 pt-2 text-sm text-red-500">{error}</p>}
+        <div className="max-h-[28rem] overflow-y-auto py-3">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <span className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : isEmpty ? (
+            <div className="text-center py-12 text-text-muted text-sm">{emptyLabel}</div>
+          ) : (
+            <div className="space-y-1 px-3">{children}</div>
+          )}
+        </div>
       </div>
-    </div>
+    </details>
   )
 }
 

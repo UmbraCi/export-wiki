@@ -32,6 +32,8 @@
     "title": "Export Progress",
     "subtitle": "Track export status, stats, and logs",
     "progressLabel": "Progress",
+    "stop": "Stop export",
+    "stopping": "Stopping…",
     "logTitle": "Export Log",
     "emptyLog": "Start an export to see progress logs",
     "stats": {

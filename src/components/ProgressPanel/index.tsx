@@ -4,7 +4,7 @@ import Button from '../common/Button'
 
 function ProgressPanel() {
   const { t } = useTranslation(['export', 'common'])
-  const { isExporting, progress, stats, logs, error, reset } = useExportStore()
+  const { isExporting, isCancelling, progress, stats, logs, error, reset, stopExport } = useExportStore()
 
   return (
     <div className="max-w-xl mx-auto mt-6 animate-fade-in stagger-6">
@@ -62,7 +62,17 @@ function ProgressPanel() {
           </div>
         </div>
 
-        <div className="px-8 py-6 bg-bg-secondary border-t border-border flex justify-end">
+        <div className="px-8 py-6 bg-bg-secondary border-t border-border flex justify-end gap-3">
+          {isExporting && (
+            <Button
+              variant="secondary"
+              onClick={() => void stopExport()}
+              loading={isCancelling}
+              disabled={isCancelling}
+            >
+              {isCancelling ? t('export:progress.stopping') : t('export:progress.stop')}
+            </Button>
+          )}
           <Button variant="secondary" onClick={reset} disabled={isExporting}>
             {t('common:buttons.reset')}
           </Button>

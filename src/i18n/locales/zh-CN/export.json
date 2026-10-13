@@ -32,6 +32,8 @@
     "title": "导出进度",
     "subtitle": "查看导出状态、统计和日志",
     "progressLabel": "进度",
+    "stop": "停止导出",
+    "stopping": "正在停止…",
     "logTitle": "导出日志",
     "emptyLog": "开始导出后可在此查看进度日志",
     "stats": {

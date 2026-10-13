@@ -8,7 +8,7 @@
   "nav": {
     "authentication": "认证",
     "spaces": "空间",
-    "pages": "页面",
+    "export": "导出",
     "settings": "设置",
     "signInFirst": "请先登录后再访问此部分"
   },

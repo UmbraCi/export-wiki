@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -123,6 +124,7 @@ pub async fn export_pages(
     }
 
     let auth = require_sidecar_auth(&state)?;
+    state.export_cancelled.store(false, Ordering::SeqCst);
     let client = SidecarClient::resolve_default()?;
     let export_id = Uuid::new_v4().to_string();
     let total = options.page_ids.len() as u32;
@@ -137,6 +139,9 @@ pub async fn export_pages(
     };
 
     if options.format == ExportFormat::MigrationPackage {
+        if state.export_cancelled.load(Ordering::SeqCst) {
+            return Err(AppError::new(codes::EXPORT_CANCELLED).into_invoke_error());
+        }
         emit_progress(
             &app,
             ExportProgressEvent {
@@ -150,14 +155,24 @@ pub async fn export_pages(
             },
         )?;
         client
-            .export_migration_package(
+            .export_migration_package_with_cancel(
                 &auth,
                 &options.page_ids,
                 &options.output_dir,
                 options.flatten,
+                &state.export_cancelled,
             )
             .await
-            .map_err(|error| redact_secrets(&error))?;
+            .map_err(|error| {
+                if state.export_cancelled.load(Ordering::SeqCst) {
+                    AppError::new(codes::EXPORT_CANCELLED).into_invoke_error()
+                } else {
+                    redact_secrets(&error)
+                }
+            })?;
+        if state.export_cancelled.load(Ordering::SeqCst) {
+            return Err(AppError::new(codes::EXPORT_CANCELLED).into_invoke_error());
+        }
         stats.exported = total;
         emit_progress(
             &app,
@@ -188,18 +203,32 @@ pub async fn export_pages(
     )?;
 
     let response = client
-        .export_pages(
+        .export_pages_with_cancel(
             &auth,
             &options.page_ids,
             format,
             options.include_attachments,
+            &state.export_cancelled,
         )
         .await
-        .map_err(|error| redact_secrets(&error))?;
+        .map_err(|error| {
+            if state.export_cancelled.load(Ordering::SeqCst) {
+                AppError::new(codes::EXPORT_CANCELLED).into_invoke_error()
+            } else {
+                redact_secrets(&error)
+            }
+        })?;
+
+    if state.export_cancelled.load(Ordering::SeqCst) {
+        return Err(AppError::new(codes::EXPORT_CANCELLED).into_invoke_error());
+    }
 
     let pages = parse_exported_pages(&response.payload).map_err(|error| redact_secrets(&error))?;
 
     for (index, page) in pages.iter().enumerate() {
+        if state.export_cancelled.load(Ordering::SeqCst) {
+            return Err(AppError::new(codes::EXPORT_CANCELLED).into_invoke_error());
+        }
         let page_number = index as u32 + 1;
         let progress_before_write = ((page_number.saturating_sub(1)) * 100) / total.max(1);
 
@@ -261,6 +290,12 @@ pub async fn export_pages(
     )?;
 
     Ok(ExportPagesAck { export_id })
+}
+
+#[tauri::command]
+pub fn cancel_export(state: State<'_, AppState>) -> Result<(), String> {
+    state.export_cancelled.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 #[cfg(test)]

@@ -2,6 +2,8 @@
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -162,14 +164,15 @@ impl SidecarClient {
             .await
     }
 
-    pub async fn export_pages(
+    pub async fn export_pages_with_cancel(
         &self,
         auth: &SidecarAuthConfig,
         page_ids: &[String],
         format: &str,
         include_attachments: bool,
+        cancelled: &AtomicBool,
     ) -> Result<SidecarResponse, String> {
-        self.request(
+        self.request_with_cancel(
             "export_pages",
             json!({
                 "auth": auth_payload(auth),
@@ -177,18 +180,20 @@ impl SidecarClient {
                 "format": format,
                 "include_attachments": include_attachments,
             }),
+            cancelled,
         )
         .await
     }
 
-    pub async fn export_migration_package(
+    pub async fn export_migration_package_with_cancel(
         &self,
         auth: &SidecarAuthConfig,
         page_ids: &[String],
         output_dir: &str,
         flatten: bool,
+        cancelled: &AtomicBool,
     ) -> Result<SidecarResponse, String> {
-        self.request(
+        self.request_with_cancel(
             "export_migration_package",
             json!({
                 "auth": auth_payload(auth),
@@ -196,8 +201,28 @@ impl SidecarClient {
                 "output_dir": output_dir,
                 "flatten": flatten,
             }),
+            cancelled,
         )
         .await
+    }
+
+    async fn request_with_cancel(
+        &self,
+        request_type: &str,
+        payload: Value,
+        cancelled: &AtomicBool,
+    ) -> Result<SidecarResponse, String> {
+        let request_id = Uuid::new_v4().to_string();
+        let line = build_request_line(request_type, &request_id, payload);
+        let response = run_one_request_cancellable(&self.program, &line, cancelled).await?;
+
+        if !response.ok {
+            return Err(response
+                .error
+                .unwrap_or_else(|| "sidecar request failed".to_string()));
+        }
+
+        Ok(response)
     }
 }
 
@@ -205,6 +230,22 @@ impl SidecarClient {
 pub async fn run_one_request(
     program: impl AsRef<OsStr>,
     request_json_line: impl AsRef<str>,
+) -> Result<SidecarResponse, String> {
+    run_one_request_inner(program, request_json_line, None).await
+}
+
+pub async fn run_one_request_cancellable(
+    program: impl AsRef<OsStr>,
+    request_json_line: impl AsRef<str>,
+    cancelled: &AtomicBool,
+) -> Result<SidecarResponse, String> {
+    run_one_request_inner(program, request_json_line, Some(cancelled)).await
+}
+
+async fn run_one_request_inner(
+    program: impl AsRef<OsStr>,
+    request_json_line: impl AsRef<str>,
+    cancelled: Option<&AtomicBool>,
 ) -> Result<SidecarResponse, String> {
     let payload = request_json_line.as_ref();
     let mut child = Command::new(program.as_ref())
@@ -249,10 +290,31 @@ pub async fn run_one_request(
     let mut stdout = BufReader::new(stdout);
 
     let mut line = String::new();
-    stdout
-        .read_line(&mut line)
-        .await
-        .map_err(|e| format!("reading sidecar stdout: {e}"))?;
+    if let Some(cancelled) = cancelled {
+        let mut read_line = Box::pin(stdout.read_line(&mut line));
+        loop {
+            if cancelled.load(Ordering::SeqCst) {
+                child
+                    .kill()
+                    .await
+                    .map_err(|e| format!("stopping sidecar process: {e}"))?;
+                return Err("EXPORT_CANCELLED".into());
+            }
+
+            tokio::select! {
+                result = &mut read_line => {
+                    result.map_err(|e| format!("reading sidecar stdout: {e}"))?;
+                    break;
+                }
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {}
+            }
+        }
+    } else {
+        stdout
+            .read_line(&mut line)
+            .await
+            .map_err(|e| format!("reading sidecar stdout: {e}"))?;
+    }
 
     let status = child
         .wait()

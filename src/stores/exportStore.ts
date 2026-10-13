@@ -24,6 +24,8 @@ function logLevelForStatus(status: ExportProgressEvent['status']): ExportLogEntr
 
 interface ExportState {
   isExporting: boolean
+  isCancelling: boolean
+  cancelRequested: boolean
   progress: number
   stats: ExportStats
   logs: ExportLogEntry[]
@@ -32,6 +34,7 @@ interface ExportState {
 
   setOptions: (options: Partial<ExportPanelOptions>) => void
   startExport: (pageIds: string[]) => Promise<void>
+  stopExport: () => Promise<void>
   reset: () => void
 }
 
@@ -45,6 +48,8 @@ const defaultStats: ExportStats = {
 
 export const useExportStore = create<ExportState>((set, get) => ({
   isExporting: false,
+  isCancelling: false,
+  cancelRequested: false,
   progress: 0,
   stats: defaultStats,
   logs: [],
@@ -65,6 +70,8 @@ export const useExportStore = create<ExportState>((set, get) => ({
     const { options } = get()
     set({
       isExporting: true,
+      isCancelling: false,
+      cancelRequested: false,
       progress: 0,
       error: null,
       stats: defaultStats,
@@ -95,29 +102,50 @@ export const useExportStore = create<ExportState>((set, get) => ({
         includeAttachments: options.includeAttachments,
         flatten: options.flatten,
       })
-      set({ isExporting: false, progress: 100 })
+      const cancelled = get().cancelRequested
+      set({ isExporting: false, progress: cancelled ? get().progress : 100 })
     } catch (err) {
+      const cancelled = get().cancelRequested
       const message = translateInvokeError(err)
       set({
-        error: message,
+        error: cancelled ? null : message,
         isExporting: false,
-        logs: [
-          ...get().logs,
-          {
-            timestamp: new Date().toLocaleTimeString(),
-            level: 'error',
-            message,
-          },
-        ],
+        logs: cancelled
+          ? get().logs
+          : [
+              ...get().logs,
+              {
+                timestamp: new Date().toLocaleTimeString(),
+                level: 'error' as const,
+                message,
+              },
+            ],
       })
     } finally {
       unlisten()
+      set({ isCancelling: false, cancelRequested: false })
+    }
+  },
+
+  stopExport: async () => {
+    if (!get().isExporting || get().isCancelling) return
+    set({ isCancelling: true, cancelRequested: true })
+    try {
+      await api.cancelExport()
+    } catch (err) {
+      set({
+        isCancelling: false,
+        cancelRequested: false,
+        error: translateInvokeError(err),
+      })
     }
   },
 
   reset: () =>
     set({
       isExporting: false,
+      isCancelling: false,
+      cancelRequested: false,
       progress: 0,
       stats: defaultStats,
       logs: [],

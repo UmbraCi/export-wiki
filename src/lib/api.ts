@@ -28,6 +28,7 @@ export const api = {
   parseConfluenceUrl: (url: string) =>
     invoke<ConfluenceUrlTarget>('parse_confluence_url_command', { url }),
   exportPages: (options: ExportOptions) => invoke<{ exportId: string }>('export_pages', { options }),
+  cancelExport: () => invoke<void>('cancel_export'),
 }
 
 export type {

@@ -35,6 +35,7 @@ pub mod codes {
     pub const INVALID_HTTPS_URL: &str = "INVALID_HTTPS_URL";
     pub const EMPTY_SELECTION: &str = "EMPTY_SELECTION";
     pub const OUTPUT_DIR_REQUIRED: &str = "OUTPUT_DIR_REQUIRED";
+    pub const EXPORT_CANCELLED: &str = "EXPORT_CANCELLED";
     pub const API_TOKEN_REQUIRED: &str = "API_TOKEN_REQUIRED";
     pub const COOKIE_REQUIRED: &str = "COOKIE_REQUIRED";
     pub const COOKIE_VALIDATION_FAILED: &str = "COOKIE_VALIDATION_FAILED";
