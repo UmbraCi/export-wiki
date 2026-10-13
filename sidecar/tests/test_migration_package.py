@@ -16,37 +16,26 @@ def page(id, path, markdown="body", **kwargs):
             "base_url": "https://wiki.example.test/wiki", "markdown": markdown, **kwargs}
 
 
-def test_hierarchy_body_children_utf8_and_relative_links(tmp_path):
+def test_plain_markdown_zip_hierarchy_utf8_titles_and_relative_links(tmp_path):
     package = publish_markdown_package(output_dir=tmp_path, pages=[
         page(1, ["产品文档", "使用指南"], "[常见问题](2.md)\n![截图](attachments/99.png)",
-             attachments=[{"path": "attachments/99.png", "content": b"image"}]),
+             attachments=[{"path": "attachments/99.png", "title": "screenshot.png", "content": b"image"}]),
         page(2, ["产品文档", "使用指南", "常见问题"], "[指南](1.md#安装)"),
         page(3, ["团队制度", "报销规则"]),
     ])
     with zipfile.ZipFile(package) as archive:
         assert set(archive.namelist()) == {
             "产品文档/使用指南.md", "产品文档/使用指南/常见问题.md",
-            "产品文档/attachments/99.png", "团队制度/报销规则.md",
+            "产品文档/attachments/screenshot.png", "团队制度/报销规则.md",
         }
         assert all(info.flag_bits & 0x800 for info in archive.infolist())
         guide = unquote(archive.read("产品文档/使用指南.md").decode("utf-8"))
         faq = unquote(archive.read("产品文档/使用指南/常见问题.md").decode("utf-8"))
         assert "[常见问题](使用指南/常见问题.md)" in guide
-        assert "![截图](attachments/99.png)" in guide
+        assert "![截图](attachments/screenshot.png)" in guide
         assert "[指南](../使用指南.md#安装)" in faq
-        assert archive.read("产品文档/attachments/99.png") == b"image"
-
-
-def test_contract_fixture_matches_plain_markdown_zip():
-    with zipfile.ZipFile(Path(__file__).parent / "fixtures/outline-markdown-package.zip") as archive:
-        assert set(archive.namelist()) == {
-            "产品文档/使用指南.md", "产品文档/使用指南/常见问题.md",
-            "产品文档/attachments/screenshot.png", "团队制度/报销规则.md",
-        }
-        markdown = unquote(archive.read("产品文档/使用指南.md").decode("utf-8"))
-        assert "[常见问题](使用指南/常见问题.md)" in markdown
-        assert "![截图](attachments/screenshot.png)" in markdown
-        assert yaml.safe_load(markdown.split("---")[1])["title"] == "使用指南"
+        assert archive.read("产品文档/attachments/screenshot.png") == b"image"
+        assert yaml.safe_load(guide.split("---")[1])["title"] == "使用指南"
 
 
 def test_title_overrides_h1_and_keeps_yaml_properties(tmp_path):

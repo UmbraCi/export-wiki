@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import os from "node:os";
 import { sidecarDist } from "./build-paths.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -16,6 +17,7 @@ test("preparation replaces the binary and preserves runnable structured logging"
   const previous = fs.existsSync(target) ? fs.statSync(target).ino : null;
   execFileSync(process.execPath, [path.join(root, "scripts/prepare-sidecar.mjs")]);
   if (!isWin && previous !== null) assert.notEqual(fs.statSync(target).ino, previous);
+  const started = Date.now();
   const result = spawnSync(target, [], {
     input: JSON.stringify({ protocol_version: 1, request_id: "smoke", type: "ping", payload: {} }) + "\n",
     encoding: "utf8",
@@ -26,4 +28,10 @@ test("preparation replaces the binary and preserves runnable structured logging"
   assert.equal(JSON.parse(result.stdout).ok, true);
   const logs = result.stderr.trim().split("\n").map(JSON.parse);
   assert.ok(logs.some((entry) => entry.level === "debug" && entry.message.includes("smoke")));
+  assert.equal(fs.existsSync(path.join(root, "logs")), false, "sidecar must not create repository logs");
+  assert.equal(fs.existsSync(path.join(root, "sidecar/cme-sidecar.spec")), false, "spec belongs in .build");
+  if (process.platform === "darwin") {
+    const logFile = path.join(os.homedir(), "Library/Application Support/com.exportwiki.app/logs/sidecar.log");
+    assert.ok(fs.statSync(logFile).mtimeMs >= started, "packaged sidecar must write to the app data directory");
+  }
 });

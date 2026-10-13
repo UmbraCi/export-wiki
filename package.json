@@ -15,7 +15,7 @@
     "build:frontend": "vite build",
     "preview": "vite preview",
     "test:sidecar": "cd sidecar && uv run pytest",
-    "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar --distpath ../.build/sidecar/dist --workpath ../.build/sidecar/work confluence_export_sidecar/__main__.py",
+    "build:sidecar": "cd sidecar && uv run python -m PyInstaller --onefile --name cme-sidecar --specpath ../.build/sidecar --distpath ../.build/sidecar/dist --workpath ../.build/sidecar/work confluence_export_sidecar/__main__.py",
     "prepare:sidecar": "npm run build:sidecar && node scripts/prepare-sidecar.mjs",
     "build:mvp": "npm run prepare:sidecar && npm run build",
     "icon": "python3 scripts/fix-macos-icon-source.py && tauri icon src-tauri/icons/icon-source.png && node scripts/prune-tauri-icons.mjs",

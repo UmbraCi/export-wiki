@@ -85,6 +85,16 @@ The Outline ZIP contains UTF-8 Markdown grouped by Confluence space, with the or
 
 Import this ZIP through the target knowledge base's Markdown ZIP import. Its importer determines the final parent documents and internal references; no Heytea folder metadata is emitted. Loose Markdown at the ZIP root is also valid for importers that group it under `Documents`.
 
+### Logs
+
+Sidecar logs use the same application data directory in development and packaged builds:
+
+- macOS: `~/Library/Application Support/com.exportwiki.app/logs/sidecar.log`
+- Windows: `%APPDATA%\com.exportwiki.app\logs\sidecar.log`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/com.exportwiki.app/logs/sidecar.log`
+
+Each file rotates at approximately 2 MB, with two backups. The log viewer keeps the latest 5,000 entries for the current session; **Save logs** saves the filtered entries to your chosen location. Generated build files, including the PyInstaller spec, live under `.build/`.
+
 ### Authentication Notes
 
 - **SSO**: A secure login window opens for IdP sign-in. After the wiki session is detected, the app connects automatically.
@@ -183,6 +193,16 @@ npm run build:mvp
 **Outline 迁移包**是普通 Markdown ZIP：按 Confluence 空间及页面祖先保留层级，父页面的 `使用指南.md` 与承载子页面的 `使用指南/` 并列。正文和 ZIP 内文件名使用 UTF-8；每页写入 YAML `title`，保证标题优先于正文的一级标题。所选页面间及附件链接改为相对路径，未选页面的链接保留为 Confluence 地址。开启「包含附件」会一起打包引用的图片与文件；重名页面、附件会区分命名，附件下载失败则不发布新包。包内不含清单、报告、HTML 或 XML，也没有扁平化选项。
 
 请在目标知识库使用 Markdown ZIP 导入入口。包内目录供导入器还原父子文档，不包含喜茶文件夹元数据；根目录直接放 Markdown 的包也兼容归入 `Documents` 父文档的导入规则。
+
+### 日志
+
+开发运行和打包运行都将 sidecar 日志保存到固定的应用数据目录：
+
+- macOS：`~/Library/Application Support/com.exportwiki.app/logs/sidecar.log`
+- Windows：`%APPDATA%\com.exportwiki.app\logs\sidecar.log`
+- Linux：`${XDG_DATA_HOME:-~/.local/share}/com.exportwiki.app/logs/sidecar.log`
+
+单个文件约 2 MB 时轮转，保留两个备份。日志界面保留本次运行最近 5,000 条；「保存日志」将当前筛选结果保存到所选位置。PyInstaller spec 等构建产物统一放在 `.build/`，不写入源码目录。
 
 ### 认证说明
 

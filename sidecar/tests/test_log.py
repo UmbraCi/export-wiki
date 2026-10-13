@@ -1,7 +1,30 @@
 import json
 import logging
+import sys
+from pathlib import Path
+import pytest
 
-from confluence_export_sidecar.log import JsonLogFormatter, SafeFileFormatter, set_log_secrets
+from confluence_export_sidecar.log import JsonLogFormatter, SafeFileFormatter, set_log_secrets, get_log_dir
+
+
+@pytest.mark.parametrize("platform,variable,relative", [
+    ("darwin", None, "Library/Application Support/com.exportwiki.app/logs"),
+    ("win32", "APPDATA", "app-data/com.exportwiki.app/logs"),
+    ("linux", "XDG_DATA_HOME", "app-data/com.exportwiki.app/logs"),
+])
+def test_log_directory_uses_app_data_instead_of_source_or_executable(monkeypatch, tmp_path, platform, variable, relative):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(sys, "platform", platform)
+    if variable:
+        monkeypatch.setenv(variable, str(tmp_path / "app-data"))
+    assert get_log_dir() == tmp_path / relative
+
+
+def test_linux_log_directory_ignores_relative_xdg_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_DATA_HOME", "logs")
+    assert get_log_dir() == tmp_path / ".local/share/com.exportwiki.app/logs"
 
 
 def test_streams_structured_levels_and_redacts_credentials_and_traceback():

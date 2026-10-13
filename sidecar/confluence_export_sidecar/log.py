@@ -7,10 +7,25 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 import sys
+import os
 import re
 from pathlib import Path
 
-_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+def get_log_dir() -> Path:
+    """Use the platform's application data directory, independent of the executable."""
+    home = Path.home()
+    if sys.platform == "darwin":
+        root = home / "Library" / "Application Support"
+    elif sys.platform == "win32":
+        root = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    else:
+        root = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+        if not root.is_absolute():
+            root = home / ".local" / "share"
+    return root / "com.exportwiki.app" / "logs"
+
+
+_LOG_DIR = get_log_dir()
 _LOG_FILE = _LOG_DIR / "sidecar.log"
 
 _configured = False
@@ -55,7 +70,7 @@ class JsonLogFormatter(logging.Formatter):
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a logger that writes to ``logs/sidecar.log``."""
+    """Return a logger that streams diagnostics and writes to the app's logs directory."""
     global _configured  # noqa: PLW0603
     if not _configured:
         root = logging.getLogger("cme-sidecar")
@@ -64,9 +79,9 @@ def get_logger(name: str) -> logging.Logger:
         stream = logging.StreamHandler(sys.stderr)
         stream.setFormatter(JsonLogFormatter())
         root.addHandler(stream)
-        # File logging is optional: a packaged sidecar may live in a read-only directory.
+        # Keep streaming diagnostics if the user's data directory is unavailable.
         try:
-            _LOG_DIR.mkdir(parents=True, exist_ok=True)
+            _LOG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
             handler = RotatingFileHandler(_LOG_FILE, maxBytes=2_000_000, backupCount=2, encoding="utf-8")
             handler.setFormatter(SafeFileFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
             root.addHandler(handler)
