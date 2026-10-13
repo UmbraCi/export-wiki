@@ -7,14 +7,14 @@ interface LayoutProps {
 
 function Layout({ children }: LayoutProps) {
   return (
-    <div className="flex h-screen bg-bg-secondary font-body">
+    <div className="flex h-screen bg-muted font-sans">
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <Header />
-        <main className="flex-1 overflow-auto px-8 py-8 animate-fade-in stagger-3">
+        <main className="relative flex-1 min-h-0 overflow-auto px-6 py-8">
           {children}
         </main>
       </div>

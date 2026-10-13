@@ -22,7 +22,8 @@
   "theme": {
     "light": "Light mode",
     "dark": "Dark mode",
-    "system": "Follow system"
+    "system": "Follow system",
+    "label": "Theme"
   },
   "buttons": {
     "next": "Next",
@@ -56,5 +57,11 @@
     "description": "Choose the display language for the app",
     "en": "English",
     "zhCN": "简体中文"
-  }
+  },
+  "validation": {
+    "required": "This field is required",
+    "httpsUrl": "Enter a valid HTTPS URL",
+    "positiveInteger": "Enter a positive whole number"
+  },
+  "loading": "Loading…"
 }

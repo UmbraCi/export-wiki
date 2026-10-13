@@ -34,6 +34,8 @@
     "count_one": "已选 {{count}} 个页面",
     "count_other": "已选 {{count}} 个页面",
     "clear": "清除选择",
-    "empty": "从页面树中选择页面以预览导出内容。"
+    "empty": "从页面树中选择页面以预览导出内容。",
+    "pageTitle": "页面标题",
+    "pageId": "页面 ID"
   }
 }

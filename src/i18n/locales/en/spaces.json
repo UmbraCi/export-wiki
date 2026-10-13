@@ -34,6 +34,8 @@
     "count_one": "{{count}} page selected",
     "count_other": "{{count}} pages selected",
     "clear": "Clear selection",
-    "empty": "Select pages from the tree to preview your export selection."
+    "empty": "Select pages from the tree to preview your export selection.",
+    "pageTitle": "Page title",
+    "pageId": "Page ID"
   }
 }

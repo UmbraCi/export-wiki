@@ -1,59 +1,144 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSelectionStore } from '../../stores/selectionStore'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import {
+  createSortedRowModel,
+  rowSortingFeature,
+  sortFns,
+  tableFeatures,
+  useTable,
+  type ColumnDef,
+} from '@tanstack/react-table'
+import { useSelectionStore } from '@/stores/selectionStore'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns,
+})
+type SelectedPage = { id: string; title: string }
 
 function ContentPreview() {
   const { t } = useTranslation('spaces')
-  const { selectedPageIds, selectedPageTitles, clearSelection } = useSelectionStore()
-
-  const selectedTitles = selectedPageIds.map(
-    (pageId) => selectedPageTitles[pageId] ?? pageId,
+  const { selectedPageIds, selectedPageTitles, clearSelection } =
+    useSelectionStore()
+  const data = useMemo(
+    () =>
+      selectedPageIds.map((id) => ({
+        id,
+        title: selectedPageTitles[id] ?? id,
+      })),
+    [selectedPageIds, selectedPageTitles],
   )
+  const columns = useMemo<ColumnDef<typeof features, SelectedPage>[]>(
+    () => [
+      { accessorKey: 'title', header: t('selected.pageTitle') },
+      { accessorKey: 'id', header: t('selected.pageId') },
+    ],
+    [t],
+  )
+  const table = useTable({ features, columns, data, getRowId: (row) => row.id })
 
   return (
-    <details open className="group card-app mt-6 animate-fade-in stagger-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 [&::-webkit-details-marker]:hidden">
-        <div>
-          <h3 className="font-display text-lg font-semibold text-text-primary">
-            {t('selected.title')}
-          </h3>
-          <p className="text-sm text-text-secondary mt-1">
-            {t('selected.count', { count: selectedPageIds.length })}
-          </p>
-        </div>
-        <span className="text-text-muted transition-transform group-open:rotate-180" aria-hidden="true">⌄</span>
-      </summary>
-
-      <div className="border-t border-border px-6 py-5">
-        <div className="flex justify-end">
-          {selectedPageIds.length > 0 && (
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-            >
-              {t('selected.clear')}
-            </button>
-          )}
-        </div>
-        {selectedPageIds.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            {t('selected.empty')}
-          </p>
-        ) : (
-          <ul className="space-y-2 mt-3">
-            {selectedTitles.map((title, index) => (
-              <li
-                key={selectedPageIds[index]}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-bg-elevated"
-              >
-                <span className="text-sm font-medium text-text-primary">{title}</span>
-                <span className="text-xs text-text-muted ml-auto">{selectedPageIds[index]}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </details>
+    <Card className="mt-6 gap-0 py-0">
+      <Accordion type="single" collapsible defaultValue="selection">
+        <AccordionItem value="selection">
+          <AccordionTrigger className="px-6 py-5">
+            <span>
+              <span className="block text-base font-semibold">
+                {t('selected.title')}
+              </span>
+              <span className="mt-1 block text-sm font-normal text-muted-foreground">
+                {t('selected.count', { count: selectedPageIds.length })}
+              </span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="border-t px-6 pt-4">
+            {data.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('selected.empty')}
+              </p>
+            ) : (
+              <>
+                <div className="mb-3 flex justify-end">
+                  <Button variant="ghost" size="sm" onClick={clearSelection}>
+                    {t('selected.clear')}
+                  </Button>
+                </div>
+                <Table aria-label={t('selected.title')}>
+                  <TableHeader>
+                    {table.getHeaderGroups().map((group) => (
+                      <TableRow key={group.id}>
+                        {group.headers.map((header) => {
+                          const sorted = header.column.getIsSorted()
+                          return (
+                            <TableHead
+                              key={header.id}
+                              aria-sort={
+                                sorted === 'asc'
+                                  ? 'ascending'
+                                  : sorted === 'desc'
+                                    ? 'descending'
+                                    : 'none'
+                              }
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={header.column.getToggleSortingHandler()}
+                              >
+                                <table.FlexRender header={header} />
+                                {sorted === 'asc' ? (
+                                  <ArrowUp />
+                                ) : sorted === 'desc' ? (
+                                  <ArrowDown />
+                                ) : (
+                                  <ArrowUpDown />
+                                )}
+                              </Button>
+                            </TableHead>
+                          )
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.getAllCells().map((cell) => (
+                          <TableCell
+                            key={cell.id}
+                            className="max-w-sm whitespace-normal break-words"
+                          >
+                            <table.FlexRender cell={cell} />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </Card>
   )
 }
 

@@ -1,16 +1,20 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import Layout from './components/Layout'
-import AuthPanel from './components/AuthPanel'
-import SpaceBrowser from './components/SpaceBrowser'
-import ContentPreview from './components/ContentPreview'
-import ExportPanel from './components/ExportPanel'
-import ProgressPanel from './components/ProgressPanel'
-import SettingsPanel from './components/SettingsPanel'
+import { Spinner } from '@/components/ui/spinner'
 import { initSsoEventListeners, useAuthStore } from './stores/authStore'
 import { useConfigStore } from './stores/configStore'
 import { authRequiredViews, useNavStore } from './stores/navStore'
 
+const AuthPanel = lazy(() => import('./components/AuthPanel'))
+const SpaceBrowser = lazy(() => import('./components/SpaceBrowser'))
+const ContentPreview = lazy(() => import('./components/ContentPreview'))
+const ExportPanel = lazy(() => import('./components/ExportPanel'))
+const ProgressPanel = lazy(() => import('./components/ProgressPanel'))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
+
 function App() {
+  const { t } = useTranslation('common')
   const { status } = useAuthStore()
   const loadConfig = useConfigStore((state) => state.loadConfig)
   const { activeView, setActiveView } = useNavStore()
@@ -18,11 +22,17 @@ function App() {
   useEffect(() => {
     void loadConfig()
     initSsoEventListeners()
-    void useAuthStore.getState().loadStatus().then(() => {
-      if (useAuthStore.getState().status.authenticated && useNavStore.getState().activeView === 'authentication') {
-        setActiveView('spaces')
-      }
-    })
+    void useAuthStore
+      .getState()
+      .loadStatus()
+      .then(() => {
+        if (
+          useAuthStore.getState().status.authenticated &&
+          useNavStore.getState().activeView === 'authentication'
+        ) {
+          setActiveView('spaces')
+        }
+      })
   }, [loadConfig, setActiveView])
 
   useEffect(() => {
@@ -64,7 +74,17 @@ function App() {
     }
   }
 
-  return <Layout>{renderView()}</Layout>
+  return (
+    <Layout>
+      <Suspense
+        fallback={
+          <Spinner className="mx-auto size-6" aria-label={t('loading')} />
+        }
+      >
+        {renderView()}
+      </Suspense>
+    </Layout>
+  )
 }
 
 export default App

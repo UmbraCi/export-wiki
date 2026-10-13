@@ -1,143 +1,193 @@
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { open } from '@tauri-apps/plugin-dialog'
-import { useExportStore } from '../../stores/exportStore'
-import { useSelectionStore } from '../../stores/selectionStore'
-import Button from '../common/Button'
-import Input from '../common/Input'
+import { Download, FolderOpen } from 'lucide-react'
+import { useExportStore } from '@/stores/exportStore'
+import { useSelectionStore } from '@/stores/selectionStore'
+import { exportFormSchema } from '@/lib/formSchemas'
+import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldLabel,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+} from '@/components/ui/field'
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+  InputGroupButton,
+} from '@/components/ui/input-group'
+import { Switch } from '@/components/ui/switch'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Spinner } from '@/components/ui/spinner'
 
 function ExportPanel() {
   const { t } = useTranslation(['export', 'common'])
-  const { options, setOptions, startExport, isExporting, error } = useExportStore()
-  const { selectedPageIds } = useSelectionStore()
-
+  const { options, setOptions, startExport, isExporting, error } =
+    useExportStore()
+  const selectedPageIds = useSelectionStore((state) => state.selectedPageIds)
+  const form = useForm<z.infer<typeof exportFormSchema>>({
+    resolver: zodResolver(exportFormSchema),
+    values: options,
+  })
+  const format = form.watch('format')
+  const outputDir = form.watch('outputDir')
   const canExport =
-    selectedPageIds.length > 0 &&
-    options.outputDir.trim().length > 0 &&
-    !isExporting
+    selectedPageIds.length > 0 && outputDir.trim().length > 0 && !isExporting
+
+  const submit = form.handleSubmit(async (values) => {
+    if (!selectedPageIds.length || isExporting) return
+    setOptions(values)
+    await startExport(selectedPageIds)
+  })
 
   return (
-    <div className="card-app mt-6 animate-fade-in stagger-5">
-      <div className="px-6 py-5 border-b border-border">
-        <h3 className="font-display text-lg font-semibold text-text-primary">{t('export:panel.title')}</h3>
-        <p className="text-sm text-text-secondary mt-1">
-          {t('export:panel.subtitle')}
-        </p>
-      </div>
-
-      <div className="px-6 py-5 space-y-5">
-        <Input
-          label={t('export:fields.outputDir')}
-          placeholder={t('export:fields.outputDirPlaceholder')}
-          value={options.outputDir}
-          onChange={(value) => setOptions({ outputDir: value })}
-          suffix={
-            <button
-              type="button"
-              onClick={async () => {
-                const selected = await open({ directory: true })
-                if (selected) setOptions({ outputDir: selected })
-              }}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
-              title={t('export:fields.pickDir')}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            </button>
-          }
-        />
-
-        {options.format !== 'migration_package' && <label className="flex items-start gap-4 cursor-pointer">
-          <button
-            type="button"
-            onClick={() => setOptions({ includeAttachments: !options.includeAttachments })}
-            className={`w-12 h-7 rounded-full transition-all duration-200 flex items-center ${
-              options.includeAttachments ? 'bg-accent' : 'bg-border'
-            }`}
-          >
-            <span
-              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                options.includeAttachments ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-          <div className="flex-1">
-            <span className="text-sm font-medium text-text-primary">{t('export:attachments.label')}</span>
-            <span className="block text-xs text-text-muted mt-1">
-              {t('export:attachments.description')}
-            </span>
-          </div>
-        </label>}
-
-        {options.format === 'migration_package' && <label className="flex items-start gap-4 cursor-pointer">
-          <button
-            type="button"
-            onClick={() => setOptions({ flatten: !options.flatten })}
-            className={`w-12 h-7 rounded-full transition-all duration-200 flex items-center ${
-              options.flatten ? 'bg-accent' : 'bg-border'
-            }`}
-          >
-            <span
-              className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                options.flatten ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-          <div className="flex-1">
-            <span className="text-sm font-medium text-text-primary">{t('export:migration.flatten.label')}</span>
-            <span className="block text-xs text-text-muted mt-1">
-              {t('export:migration.flatten.description')}
-            </span>
-          </div>
-        </label>}
-
-        <div className="space-y-2">
-          <span className="text-sm font-medium text-text-primary">{t('export:format.label')}</span>
-          <div className="rounded-lg border border-border bg-bg-elevated px-4 py-3 space-y-3">
-            {([
-              { value: 'markdown' as const, label: t('export:format.markdown') },
-              { value: 'html' as const, label: t('export:format.html') },
-              { value: 'migration_package' as const, label: t('export:format.migration_package') },
-            ]).map((formatOption) => {
-              const selected = options.format === formatOption.value
-              return (
-                <button
-                  key={formatOption.value}
-                  type="button"
-                  onClick={() => setOptions({ format: formatOption.value })}
-                  className={`w-full flex items-center justify-between gap-4 rounded-md px-2 py-1 transition-colors ${
-                    selected ? 'text-text-primary' : 'text-text-muted hover:text-text-primary'
-                  }`}
-                >
-                  <span className="text-sm">{formatOption.label}</span>
-                  <span
-                    className={`text-xs font-medium ${
-                      selected ? 'text-accent' : 'text-text-muted'
-                    }`}
+    <form onSubmit={submit} noValidate>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>
+            <h3>{t('export:panel.title')}</h3>
+          </CardTitle>
+          <CardDescription>{t('export:panel.subtitle')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <fieldset disabled={isExporting} className="space-y-6">
+            <Field data-invalid={!!form.formState.errors.outputDir}>
+              <FieldLabel htmlFor="export-output">
+                {t('export:fields.outputDir')}
+              </FieldLabel>
+              <InputGroup>
+                <InputGroupInput
+                  id="export-output"
+                  placeholder={t('export:fields.outputDirPlaceholder')}
+                  {...form.register('outputDir')}
+                  aria-invalid={!!form.formState.errors.outputDir}
+                  aria-describedby={
+                    form.formState.errors.outputDir
+                      ? 'export-output-error'
+                      : undefined
+                  }
+                />
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    aria-label={t('export:fields.pickDir')}
+                    onClick={async () => {
+                      const selected = await open({ directory: true })
+                      if (selected)
+                        form.setValue('outputDir', selected, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                    }}
                   >
-                    {selected ? t('common:buttons.selected') : t('common:buttons.choose')}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-sm text-error">{error}</p>
-        )}
-
-        <div className="flex justify-end">
-          <Button
-            onClick={() => void startExport(selectedPageIds)}
-            loading={isExporting}
-            disabled={!canExport}
-          >
+                    <FolderOpen />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
+              {form.formState.errors.outputDir && (
+                <FieldError id="export-output-error">
+                  {t('common:validation.required')}
+                </FieldError>
+              )}
+            </Field>
+            <Controller
+              control={form.control}
+              name={
+                format === 'migration_package'
+                  ? 'flatten'
+                  : 'includeAttachments'
+              }
+              render={({ field }) => (
+                <Field orientation="horizontal">
+                  <Switch
+                    id="export-attachments"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    aria-describedby="export-attachments-description"
+                  />
+                  <FieldContent>
+                    <FieldLabel htmlFor="export-attachments">
+                      {t(
+                        format === 'migration_package'
+                          ? 'export:migration.flatten.label'
+                          : 'export:attachments.label',
+                      )}
+                    </FieldLabel>
+                    <FieldDescription id="export-attachments-description">
+                      {t(
+                        format === 'migration_package'
+                          ? 'export:migration.flatten.description'
+                          : 'export:attachments.description',
+                      )}
+                    </FieldDescription>
+                  </FieldContent>
+                </Field>
+              )}
+            />
+            <Controller
+              control={form.control}
+              name="format"
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel id="export-format-label">
+                    {t('export:format.label')}
+                  </FieldLabel>
+                  <RadioGroup
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    aria-labelledby="export-format-label"
+                  >
+                    {(['markdown', 'html', 'migration_package'] as const).map(
+                      (value) => (
+                        <Field
+                          key={value}
+                          orientation="horizontal"
+                          className="rounded-lg border p-3"
+                        >
+                          <RadioGroupItem
+                            id={`format-${value}`}
+                            value={value}
+                          />
+                          <FieldLabel htmlFor={`format-${value}`}>
+                            {t(`export:format.${value}`)}
+                          </FieldLabel>
+                        </Field>
+                      ),
+                    )}
+                  </RadioGroup>
+                </Field>
+              )}
+            />
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </fieldset>
+        </CardContent>
+        <CardFooter className="justify-end border-t">
+          <Button type="submit" disabled={!canExport} aria-busy={isExporting}>
+            {isExporting ? <Spinner aria-hidden="true" /> : <Download />}
             {t('export:button.export', { count: selectedPageIds.length })}
           </Button>
-        </div>
-      </div>
-    </div>
+        </CardFooter>
+      </Card>
+    </form>
   )
 }
 

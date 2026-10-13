@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { listen } from '@tauri-apps/api/event'
 import { api } from '../../lib/api'
 import type { PageNode } from '../../lib/contracts'
@@ -14,34 +20,65 @@ import SpaceBrowser from './index'
 import App from '../../App'
 
 vi.mock('../../lib/api', () => ({
-  api: { getSpaces: vi.fn(), getPageDescendants: vi.fn(), getPageChildren: vi.fn(), exportPages: vi.fn() },
+  api: {
+    getSpaces: vi.fn(),
+    getPageDescendants: vi.fn(),
+    getPageChildren: vi.fn(),
+    exportPages: vi.fn(),
+  },
 }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }))
-vi.mock('../../stores/themeStore', () => ({
-  useThemeStore: () => ({ mode: 'system', setMode: vi.fn() }),
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ theme: 'system', setTheme: vi.fn() }),
 }))
 
-function page(id: string, children: PageNode[] = [], childrenLoaded = true): PageNode {
-  return { id, title: id, parentId: null, children, childrenLoaded, hasChildren: !childrenLoaded || children.length > 0 }
+function page(
+  id: string,
+  children: PageNode[] = [],
+  childrenLoaded = true,
+): PageNode {
+  return {
+    id,
+    title: id,
+    parentId: null,
+    children,
+    childrenLoaded,
+    hasChildren: !childrenLoaded || children.length > 0,
+  }
 }
 
 beforeEach(async () => {
   vi.resetAllMocks()
   await i18n.changeLanguage('en')
   useSelectionStore.setState({
-    spaces: [], activeSpaceKey: 'SPACE',
-    pageTrees: { SPACE: [page('root', [page('branch', [], false), page('sibling')])] },
-    selectedPageIds: [], selectedPageTitles: {}, selectedSubtreePageIds: {}, loadingPageIds: [],
-    searchResults: [], isSearching: false, isLoadingPages: false, error: null, errorCode: null,
+    spaces: [],
+    activeSpaceKey: 'SPACE',
+    pageTrees: {
+      SPACE: [page('root', [page('branch', [], false), page('sibling')])],
+    },
+    selectedPageIds: [],
+    selectedPageTitles: {},
+    selectedSubtreePageIds: {},
+    loadingPageIds: [],
+    searchResults: [],
+    isSearching: false,
+    isLoadingPages: false,
+    error: null,
+    errorCode: null,
   })
   useExportStore.getState().reset()
   useNavStore.setState({ activeView: 'spaces' })
-  useExportStore.getState().setOptions({ outputDir: '/tmp/export-wiki-selection-test' })
+  useExportStore
+    .getState()
+    .setOptions({ outputDir: '/tmp/export-wiki-selection-test' })
   vi.mocked(api.getSpaces).mockResolvedValue([])
   vi.mocked(api.getPageChildren).mockResolvedValue([page('hidden-leaf')])
   vi.mocked(api.getPageDescendants).mockImplementation(async (id) =>
-    id === 'root' ? [page('branch'), page('hidden-leaf'), page('sibling')]
-      : id === 'branch' ? [page('hidden-leaf')] : [],
+    id === 'root'
+      ? [page('branch'), page('hidden-leaf'), page('sibling')]
+      : id === 'branch'
+        ? [page('hidden-leaf')]
+        : [],
   )
   vi.mocked(api.exportPages).mockResolvedValue({ exportId: 'test-export' })
   vi.mocked(listen).mockResolvedValue(vi.fn())
@@ -54,14 +91,19 @@ afterEach(() => {
 
 it('opens export as a space subpage and preserves selection and tree expansion on return', async () => {
   useAuthStore.setState({
-    status: { authenticated: true, method: 'cookie', baseUrl: 'https://wiki.example.com', displayName: null },
+    status: {
+      authenticated: true,
+      method: 'cookie',
+      baseUrl: 'https://wiki.example.com',
+      displayName: null,
+    },
   })
   vi.spyOn(useAuthStore.getState(), 'loadStatus').mockResolvedValue()
   vi.spyOn(useConfigStore.getState(), 'loadConfig').mockResolvedValue()
   render(<App />)
 
   expect(screen.queryByRole('button', { name: 'Export' })).toBeNull()
-  const next = screen.getByRole('button', { name: 'Next' })
+  const next = await screen.findByRole('button', { name: 'Next' })
   expect(next.hasAttribute('disabled')).toBe(true)
   fireEvent.click(screen.getByRole('checkbox', { name: 'Select root' }))
   await waitFor(() => expect(next.hasAttribute('disabled')).toBe(false))
@@ -69,40 +111,71 @@ it('opens export as a space subpage and preserves selection and tree expansion o
   fireEvent.click(next)
 
   expect(screen.getByRole('heading', { name: 'Export', level: 1 })).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Spaces' }).getAttribute('aria-current')).toBe('page')
+  expect(
+    screen.getByRole('button', { name: 'Spaces' }).getAttribute('aria-current'),
+  ).toBe('page')
   expect(screen.queryByRole('checkbox', { name: 'Select root' })).toBeNull()
-  expect(screen.getByRole('button', { name: 'Export 4 Pages' })).toBeTruthy()
+  expect(
+    await screen.findByRole('button', { name: 'Export 4 Pages' }),
+  ).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Back to spaces' }))
 
-  expect(screen.getByRole('checkbox', { name: 'Select branch' }).getAttribute('aria-checked')).toBe('true')
+  expect(
+    screen
+      .getByRole('checkbox', { name: 'Select branch' })
+      .getAttribute('aria-checked'),
+  ).toBe('true')
   expect(useSelectionStore.getState().selectedPageIds).toHaveLength(4)
   expect(api.getSpaces).toHaveBeenCalledTimes(1)
 })
 
 it('waits for pending subtree selection before allowing the next step', () => {
-  useSelectionStore.setState({ selectedPageIds: ['root'], loadingPageIds: ['branch'] })
+  useSelectionStore.setState({
+    selectedPageIds: ['root'],
+    loadingPageIds: ['branch'],
+  })
   render(<SpaceBrowser />)
-  expect(screen.getByRole('button', { name: 'Next' }).hasAttribute('disabled')).toBe(true)
+  expect(
+    screen.getByRole('button', { name: 'Next' }).hasAttribute('disabled'),
+  ).toBe(true)
 })
 
 it('unchecks a collapsed branch, exports only remaining pages, and restores a mixed parent', async () => {
-  render(<><SpaceBrowser /><ExportPanel /></>)
+  render(
+    <>
+      <SpaceBrowser />
+      <ExportPanel />
+    </>,
+  )
   const root = screen.getByRole('checkbox', { name: 'Select root' })
   fireEvent.click(root)
-  await waitFor(() => expect(useSelectionStore.getState().selectedPageIds).toHaveLength(4))
+  await waitFor(() =>
+    expect(useSelectionStore.getState().selectedPageIds).toHaveLength(4),
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Expand root' }))
   const branch = screen.getByRole('checkbox', { name: 'Select branch' })
   expect(branch.getAttribute('aria-checked')).toBe('true')
   fireEvent.click(branch)
 
-  await waitFor(() => expect(useSelectionStore.getState().selectedPageIds).toEqual(['root', 'sibling']))
+  await waitFor(() =>
+    expect(useSelectionStore.getState().selectedPageIds).toEqual([
+      'root',
+      'sibling',
+    ]),
+  )
   expect(root.getAttribute('aria-checked')).toBe('mixed')
   expect(branch.getAttribute('aria-checked')).toBe('false')
   fireEvent.click(screen.getByRole('button', { name: 'Export 2 Pages' }))
-  await waitFor(() => expect(api.exportPages).toHaveBeenCalledWith(expect.objectContaining({ pageIds: ['root', 'sibling'] })))
+  await waitFor(() =>
+    expect(api.exportPages).toHaveBeenCalledWith(
+      expect.objectContaining({ pageIds: ['root', 'sibling'] }),
+    ),
+  )
 
   fireEvent.click(screen.getByRole('button', { name: 'Expand branch' }))
-  const leaf = await screen.findByRole('checkbox', { name: 'Select hidden-leaf' })
+  const leaf = await screen.findByRole('checkbox', {
+    name: 'Select hidden-leaf',
+  })
   expect(leaf.getAttribute('aria-checked')).toBe('false')
   fireEvent.click(root)
   await waitFor(() => expect(root.getAttribute('aria-checked')).toBe('true'))

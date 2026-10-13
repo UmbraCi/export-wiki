@@ -1,78 +1,93 @@
 import { useTranslation } from 'react-i18next'
-import { useThemeStore, ThemeMode } from '../../stores/themeStore'
-import { useNavStore } from '../../stores/navStore'
+import { useTheme } from 'next-themes'
+import { Monitor, Moon, Sun } from 'lucide-react'
+import { useNavStore } from '@/stores/navStore'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 
 function Header() {
   const { t } = useTranslation('common')
-  const { mode, setMode } = useThemeStore()
+  const { theme, setTheme } = useTheme()
   const { activeView, setActiveView } = useNavStore()
 
   return (
-    <header className="bg-bg-card border-b border-border px-8 py-6">
-      <div className="flex items-center justify-between animate-fade-in stagger-1">
+    <header className="border-b bg-card px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           {activeView === 'export' ? (
-            <nav aria-label={t('nav.breadcrumb')} className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setActiveView('spaces')}
-                className="rounded text-sm text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent"
-              >
-                {t('buttons.backToSpaces')}
-              </button>
-              <span className="text-text-muted" aria-hidden="true">›</span>
-              <h1 className="font-display text-xl font-semibold text-text-primary tracking-tight" aria-current="page">
-                {t('nav.export')}
-              </h1>
-            </nav>
+            <Breadcrumb aria-label={t('nav.breadcrumb')}>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <Button
+                    variant="link"
+                    className="px-0"
+                    onClick={() => setActiveView('spaces')}
+                  >
+                    {t('buttons.backToSpaces')}
+                  </Button>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>
+                    <h1 className="text-xl font-semibold">{t('nav.export')}</h1>
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           ) : (
-            <h1 className="font-display text-xl font-semibold text-text-primary tracking-tight">
-              {t('app.title')}
-            </h1>
+            <h1 className="text-xl font-semibold">{t('app.title')}</h1>
           )}
-          <p className="text-sm text-text-secondary mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             {t('app.subtitle')}
           </p>
         </div>
-
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-bg-secondary">
-            <ThemeButton mode="light" current={mode} setMode={setMode} title={t('theme.light')} icon="☀" />
-            <ThemeButton mode="system" current={mode} setMode={setMode} title={t('theme.system')} icon="●" />
-            <ThemeButton mode="dark" current={mode} setMode={setMode} title={t('theme.dark')} icon="☾" />
-          </div>
-
-          <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-bg-secondary">
-            <span className="w-2 h-2 rounded-full bg-success" />
-            <span className="text-sm text-text-secondary">{t('status.ready')}</span>
-          </div>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            value={theme ?? 'system'}
+            onValueChange={(value) => {
+              if (value) setTheme(value)
+            }}
+            aria-label={t('theme.label')}
+          >
+            <ToggleGroupItem
+              value="light"
+              aria-label={t('theme.light')}
+              title={t('theme.light')}
+            >
+              <Sun />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="system"
+              aria-label={t('theme.system')}
+              title={t('theme.system')}
+            >
+              <Monitor />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="dark"
+              aria-label={t('theme.dark')}
+              title={t('theme.dark')}
+            >
+              <Moon />
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <Badge variant="secondary">
+            <span className="size-2 rounded-full bg-emerald-500" />
+            {t('status.ready')}
+          </Badge>
         </div>
       </div>
     </header>
-  )
-}
-
-function ThemeButton({ mode, current, setMode, title, icon }: {
-  mode: ThemeMode
-  current: ThemeMode
-  setMode: (mode: ThemeMode) => void
-  title: string
-  icon: string
-}) {
-  const isActive = mode === current
-
-  return (
-    <button
-      onClick={() => setMode(mode)}
-      className={`w-8 h-8 rounded-md flex items-center justify-center text-sm transition-all duration-200 ${
-        isActive
-          ? 'bg-accent text-white'
-          : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated'
-      }`}
-      title={title}
-    >
-      {icon}
-    </button>
   )
 }
 

@@ -65,12 +65,17 @@ function redactSecrets(message: string): string {
   return message.replace(/token|cookie|password|secret/gi, '[redacted]')
 }
 
-export function parseBackendError(error: unknown): { code: string; params?: Record<string, unknown> } | null {
+export function parseBackendError(
+  error: unknown,
+): { code: string; params?: Record<string, unknown> } | null {
   const message = error instanceof Error ? error.message : String(error)
   try {
-    const parsed = JSON.parse(message) as { code?: string; params?: Record<string, unknown> }
+    const parsed = JSON.parse(message) as {
+      code?: string
+      params?: Record<string, unknown>
+    }
     if (parsed && typeof parsed.code === 'string') {
-      return parsed
+      return { code: parsed.code, params: parsed.params }
     }
   } catch {
     // not structured backend error

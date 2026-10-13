@@ -1,5 +1,11 @@
+import { BookDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
-import { authRequiredViews, useNavStore, type AppView } from '../../stores/navStore'
+import {
+  authRequiredViews,
+  useNavStore,
+  type AppView,
+} from '../../stores/navStore'
 import { useAuthStore } from '../../stores/authStore'
 
 function Sidebar() {
@@ -14,21 +20,17 @@ function Sidebar() {
   ]
 
   return (
-    <aside className="w-64 bg-bg-card flex flex-col h-full border-r border-border">
+    <aside className="w-64 bg-card flex flex-col h-full border-r border-border">
       <div className="px-6 pt-6 pb-4">
-        <div className="flex items-center gap-3 animate-fade-in stagger-1">
-          <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shadow-md">
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/>
-            </svg>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-md">
+            <BookDown className="size-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">
+            <h1 className="font-sans text-lg font-semibold text-foreground tracking-tight">
               {t('app.name')}
             </h1>
-            <p className="text-xs text-text-muted">
-              {t('app.tagline')}
-            </p>
+            <p className="text-xs text-muted-foreground">{t('app.tagline')}</p>
           </div>
         </div>
       </div>
@@ -39,7 +41,10 @@ function Sidebar() {
             <NavItem
               key={view}
               label={label}
-              active={activeView === view || (view === 'spaces' && activeView === 'export')}
+              active={
+                activeView === view ||
+                (view === 'spaces' && activeView === 'export')
+              }
               disabled={!authenticated && authRequiredViews.includes(view)}
               disabledTitle={t('nav.signInFirst')}
               onClick={() => setActiveView(view)}
@@ -49,7 +54,7 @@ function Sidebar() {
       </nav>
 
       <div className="px-6 py-4 border-t border-border">
-        <p className="text-xs text-text-muted text-center">
+        <p className="text-xs text-muted-foreground text-center">
           {t('version', { version: '1.0.0' })}
         </p>
       </div>
@@ -71,7 +76,8 @@ function NavItem({
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
+      variant={active ? 'secondary' : 'ghost'}
       type="button"
       onClick={onClick}
       disabled={disabled}
@@ -79,14 +85,14 @@ function NavItem({
       aria-current={active ? 'page' : undefined}
       className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
         disabled
-          ? 'text-text-muted cursor-not-allowed opacity-50'
+          ? 'text-muted-foreground cursor-not-allowed opacity-50'
           : active
-            ? 'bg-bg-secondary text-text-primary'
-            : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
+            ? 'bg-muted text-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
       }`}
     >
       {label}
-    </button>
+    </Button>
   )
 }
 

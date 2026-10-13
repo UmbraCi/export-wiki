@@ -16,21 +16,21 @@ The UI supports **English** and **Simplified Chinese**.
 
 ### Features
 
-| Area | Description |
-|------|-------------|
-| **Authentication** | SSO via embedded browser window, plus manual fallback with API token or session cookie |
-| **Space browser** | List spaces, browse page trees, multi-select pages for export |
-| **Search & navigation** | Search pages by title; open a page directly from a Confluence URL |
-| **Export formats** | Markdown (`.md`) or HTML (`.html`) |
-| **Attachments** | Download images and files into a local `attachments/` folder |
-| **Incremental export** | Skip pages unchanged since the last run |
-| **Background sync** | Periodically re-export selected pages while the app is open (opt-in) |
-| **Progress tracking** | Live export status, statistics, and logs |
+| Area                    | Description                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| **Authentication**      | SSO via embedded browser window, plus manual fallback with API token or session cookie |
+| **Space browser**       | List spaces, browse page trees, multi-select pages for export                          |
+| **Search & navigation** | Search pages by title; open a page directly from a Confluence URL                      |
+| **Export formats**      | Markdown (`.md`) or HTML (`.html`)                                                     |
+| **Attachments**         | Download images and files into a local `attachments/` folder                           |
+| **Incremental export**  | Skip pages unchanged since the last run                                                |
+| **Background sync**     | Periodically re-export selected pages while the app is open (opt-in)                   |
+| **Progress tracking**   | Live export status, statistics, and logs                                               |
 
 ### Architecture
 
 ```
-React + TypeScript (UI)
+React 19 + TypeScript + shadcn/ui (Radix) + Tailwind CSS + Lucide (UI)
         ↕ IPC
 Rust / Tauri (auth, config, file I/O, orchestration)
         ↕ stdio JSON
@@ -39,7 +39,7 @@ Python sidecar (Confluence API + conversion via confluence-markdown-exporter)
 
 ### Requirements
 
-- **Node.js** 18+
+- **Node.js** 24.15+ (the repository pins 24.20 in `.node-version`)
 - **Rust** toolchain ([rustup](https://rustup.rs/))
 - **uv** (Python package manager) — installed automatically by setup on macOS/Linux
 - **Python** 3.10+ (managed by uv)
@@ -65,12 +65,13 @@ npm run build:mvp
 
 Other useful scripts:
 
-| Command | Description |
-|---------|-------------|
-| `npm test` | Run frontend unit tests |
-| `npm run test:sidecar` | Run Python sidecar tests |
-| `npm run build:frontend` | Build the web UI only |
-| `npm run icon` | Regenerate app icons from `src-tauri/icons/icon-source.png` |
+| Command                  | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| `npm test`               | Run frontend unit tests                                     |
+| `npm run typecheck`      | Check frontend TypeScript                                   |
+| `npm run test:sidecar`   | Run Python sidecar tests                                    |
+| `npm run build:frontend` | Build the web UI only                                       |
+| `npm run icon`           | Regenerate app icons from `src-tauri/icons/icon-source.png` |
 
 ### Usage
 
@@ -88,6 +89,12 @@ Other useful scripts:
 
 Credentials are stored locally on your machine.
 
+### Frontend maintenance
+
+Use npm and `package-lock.json`. Add UI controls with `npm run ui:add -- <name>`; `src/components/ui/` contains official shadcn registry source using Radix primitives. Compose those controls in screens instead of writing new Radix implementations. Keep project colors in `src/styles/index.css`.
+
+React Hook Form and Zod handle authentication, export, and settings drafts. Settings are persisted together when **Save Settings** is clicked. Credential drafts stay in memory and are discarded when switching authentication modes. TanStack Table v9 powers the sortable selected-pages preview; page-tree loading and subtree selection remain in the selection store. next-themes provides light, dark, and system modes; Sonner provides notifications.
+
 ### License
 
 [MIT](LICENSE)
@@ -104,21 +111,21 @@ Export Wiki 是一款基于 **Tauri 2** 的跨平台桌面应用，用于连接 
 
 ### 功能特性
 
-| 模块 | 说明 |
-|------|------|
-| **认证登录** | 嵌入式浏览器 SSO 登录；也支持 API 令牌或会话 Cookie 手动登录 |
-| **空间浏览** | 列出空间、浏览页面树、多选待导出页面 |
-| **搜索与导航** | 按标题搜索页面；粘贴 Confluence URL 直接定位页面 |
-| **导出格式** | Markdown（`.md`）或 HTML（`.html`） |
-| **附件下载** | 将图片与文件保存到本地 `attachments/` 目录 |
-| **增量导出** | 跳过自上次导出以来未修改的页面 |
-| **后台同步** | 应用打开时可定时重新导出已选页面（默认关闭，需手动开启） |
-| **进度追踪** | 实时导出状态、统计信息与日志 |
+| 模块           | 说明                                                         |
+| -------------- | ------------------------------------------------------------ |
+| **认证登录**   | 嵌入式浏览器 SSO 登录；也支持 API 令牌或会话 Cookie 手动登录 |
+| **空间浏览**   | 列出空间、浏览页面树、多选待导出页面                         |
+| **搜索与导航** | 按标题搜索页面；粘贴 Confluence URL 直接定位页面             |
+| **导出格式**   | Markdown（`.md`）或 HTML（`.html`）                          |
+| **附件下载**   | 将图片与文件保存到本地 `attachments/` 目录                   |
+| **增量导出**   | 跳过自上次导出以来未修改的页面                               |
+| **后台同步**   | 应用打开时可定时重新导出已选页面（默认关闭，需手动开启）     |
+| **进度追踪**   | 实时导出状态、统计信息与日志                                 |
 
 ### 架构
 
 ```
-React + TypeScript（界面）
+React 19 + TypeScript + shadcn/ui（Radix）+ Tailwind CSS + Lucide（界面）
         ↕ IPC
 Rust / Tauri（认证、配置、文件写入、任务编排）
         ↕ stdio JSON
@@ -127,7 +134,7 @@ Python Sidecar（Confluence API + confluence-markdown-exporter 转换）
 
 ### 环境要求
 
-- **Node.js** 18+
+- **Node.js** 24.15+（`.node-version` 固定为 24.20）
 - **Rust** 工具链（[rustup](https://rustup.rs/)）
 - **uv**（Python 包管理器）— macOS/Linux 下 setup 脚本可自动安装
 - **Python** 3.10+（由 uv 管理）
@@ -153,12 +160,13 @@ npm run build:mvp
 
 其他常用命令：
 
-| 命令 | 说明 |
-|------|------|
-| `npm test` | 运行前端单元测试 |
-| `npm run test:sidecar` | 运行 Python sidecar 测试 |
-| `npm run build:frontend` | 仅构建 Web 前端 |
-| `npm run icon` | 从 `src-tauri/icons/icon-source.png` 重新生成应用图标 |
+| 命令                     | 说明                                                  |
+| ------------------------ | ----------------------------------------------------- |
+| `npm test`               | 运行前端单元测试                                      |
+| `npm run typecheck`      | 检查前端 TypeScript                                   |
+| `npm run test:sidecar`   | 运行 Python sidecar 测试                              |
+| `npm run build:frontend` | 仅构建 Web 前端                                       |
+| `npm run icon`           | 从 `src-tauri/icons/icon-source.png` 重新生成应用图标 |
 
 ### 使用流程
 
@@ -175,6 +183,12 @@ npm run build:mvp
 - **会话 Cookie**：在浏览器登录 Confluence 后，从 DevTools 复制完整 Cookie（需包含 `seraph.confluence`，不能只有 `JSESSIONID`）。
 
 凭证仅保存在本机。
+
+### 前端维护
+
+使用 npm 与 `package-lock.json`。通过 `npm run ui:add -- <名称>` 添加控件；`src/components/ui/` 使用官方 shadcn 注册表源码及 Radix primitives，页面直接组合这些控件，不另写 Radix 实现。项目颜色统一在 `src/styles/index.css` 中维护。
+
+认证、导出与设置草稿使用 React Hook Form 和 Zod；设置统一在点击「保存设置」时持久化。凭据草稿仅存在内存中，切换认证方式时清空。已选页面预览使用 TanStack Table v9 排序；页面树的懒加载和子树选择仍由 selection store 管理。next-themes 提供浅色、深色与跟随系统模式，Sonner 提供通知。
 
 ### 许可证
 
