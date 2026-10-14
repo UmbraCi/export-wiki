@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Capability for the main window","local":true,"windows":["main","confluence-sso"],"permissions":["core:default","shell:allow-open","dialog:allow-open","dialog:allow-save",{"identifier":"shell:allow-execute","allow":[{"args":true,"name":"binaries/cme-sidecar","sidecar":true}]}]}}

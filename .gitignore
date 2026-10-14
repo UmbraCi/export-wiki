@@ -3,6 +3,13 @@ sidecar/.venv/
 sidecar/**/*.pyc
 sidecar/**/__pycache__/
 **/*.egg-info/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+*.tsbuildinfo
 
 # Build outputs (see scripts/build-paths.mjs)
 .build/
@@ -21,7 +28,15 @@ logs/
 
 # Rust/Tauri
 src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/rust_out
 Cargo.lock
+
+# Local agent installations and machine-specific export checks
+.agents/
+skills-lock.json
+.scratch/export-validation.json
+.scratch/live_export_check.py
 
 .cursor/*
 !.cursor/mcp.json
