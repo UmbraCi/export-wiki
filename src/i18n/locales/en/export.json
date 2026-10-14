@@ -26,8 +26,8 @@
     "title": "Export Progress",
     "subtitle": "Track export status, stats, and logs",
     "progressLabel": "Progress",
-    "stop": "Stop export",
-    "stopping": "Stopping…",
+    "stop": "Pause export",
+    "stopping": "Pausing…",
     "logTitle": "Export Log",
     "emptyLog": "Start an export to see progress logs",
     "stats": {
@@ -36,7 +36,10 @@
       "skipped": "Skipped",
       "failed": "Failed",
       "files": "Files"
-    }
+    },
+    "resume": "Resume export",
+    "retry": "Retry unfinished work",
+    "saved": "Progress saved automatically. Completed pages and attachments will be reused."
   },
   "logs": {
     "level": "Minimum level",
@@ -52,13 +55,14 @@
     "download": "Save logs",
     "noMatches": "No logs match this filter",
     "retention": "Showing {{count}} / {{total}} entries. Latest 5,000 entries kept for this session. Level only filters the display; copying and saving use the current filter.",
-    "starting": "Starting export: {{count}} pages, format={{format}}",
-    "waiting": "No new export activity for {{seconds}} seconds. The last operation may still be waiting for the server; you can stop the export.",
-    "stopping": "Cancellation requested; stopping the export process",
-    "cancelled": "Export cancelled"
+    "starting": "Starting export: {{count}} pages, format={{format}}, page IDs=[{{pageIds}}]",
+    "waiting": "No new activity for {{seconds}} seconds; waiting for the server. You can pause and resume later.",
+    "stopping": "Pausing export; downloaded content is saved automatically",
+    "cancelled": "Export paused; unfinished work can be resumed"
   },
   "queued_one": "Queued {{count}} page for export",
   "queued_other": "Queued {{count}} pages for export",
   "writing": "Writing {{filename}}",
-  "complete": "Export complete: {{exported}} exported, {{failed}} failed, {{attachments}} attachments"
+  "complete": "Export complete: {{exported}} exported, {{failed}} failed, {{attachments}} attachments",
+  "checkpoint": "Saved {{completed}} / {{total}} pages"
 }

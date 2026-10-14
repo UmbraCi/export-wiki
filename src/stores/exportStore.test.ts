@@ -61,7 +61,7 @@ it('receives detailed logs while export is pending, warns on inactivity, and rem
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('bounds log history and persists only the selected level', () => {
+it('bounds log history and persists the selected level and unfinished export', () => {
   const entry: ExportLogEntry = {
     timestamp: '2026-10-13T00:00:00Z',
     level: 'info',
@@ -74,5 +74,29 @@ it('bounds log history and persists only the selected level', () => {
   expect(useExportStore.getState().logs.slice(-1)[0]?.message).toBe('new')
   expect(
     JSON.parse(localStorage.getItem('export-log-preferences')!).state,
-  ).toEqual({ logLevel: 'debug' })
+  ).toEqual({ logLevel: 'debug', resumeOptions: null })
+})
+
+it('logs every selected page ID and retries the original selection and options after failure', async () => {
+  useExportStore.getState().setOptions({ format: 'migration_package', outputDir: '/original' })
+  vi.mocked(api.exportPages).mockRejectedValueOnce(new Error('connection interrupted'))
+  await useExportStore.getState().startExport(['123', '456'])
+  expect(useExportStore.getState().logs[0].message).toContain('123, 456')
+  expect(useExportStore.getState().resumeOptions?.pageIds).toEqual(['123', '456'])
+  useExportStore.getState().setOptions({ format: 'html', outputDir: '/other' })
+  vi.mocked(api.exportPages).mockResolvedValueOnce({ exportId: 'done' })
+  await useExportStore.getState().resumeExport()
+  expect(api.exportPages).toHaveBeenLastCalledWith({ pageIds: ['123', '456'], format: 'migration_package', outputDir: '/original', includeAttachments: true })
+  expect(useExportStore.getState().resumeOptions).toBeNull()
+})
+
+it('pauses a running export and preserves its continuation after cancellation settles', async () => {
+  let fail!: (error: Error) => void
+  vi.mocked(api.exportPages).mockReturnValue(new Promise((_, reject) => { fail = reject }))
+  const pending = useExportStore.getState().startExport(['1'])
+  await vi.waitFor(() => expect(api.exportPages).toHaveBeenCalled())
+  await useExportStore.getState().stopExport()
+  fail(new Error('EXPORT_CANCELLED'))
+  await pending
+  expect(useExportStore.getState()).toMatchObject({ isExporting: false, isPaused: true, error: null, resumeOptions: { pageIds: ['1'] } })
 })

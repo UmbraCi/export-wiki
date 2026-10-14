@@ -5,7 +5,6 @@ import { fileURLToPath } from "url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sidecarDir = path.join(root, "sidecar");
-const binariesDir = path.join(root, "src-tauri", "binaries");
 
 function run(cmd, opts = {}) {
   console.log(`\n> ${cmd}`);
@@ -49,54 +48,19 @@ function installUv() {
   run("curl -LsSf https://astral.sh/uv/install.sh | sh");
 }
 
-function hostTriple() {
-  try {
-    return execSync("rustc --print host-tuple", { encoding: "utf8" }).trim();
-  } catch {
-    return null;
-  }
-}
-
-function ensureDevShim(triple) {
-  if (!triple || process.platform === "win32") return;
-
-  const dest = path.join(binariesDir, `cme-sidecar-${triple}`);
-  if (fs.existsSync(dest)) {
-    fs.chmodSync(dest, 0o755);
-    return;
-  }
-
-  const content = `#!/usr/bin/env sh
-set -eu
-BIN_DIR="$(CDPATH="" cd "$(dirname "$0")" && pwd)"
-REPO="$(CDPATH="" cd "$BIN_DIR/../.." && pwd)"
-SC="$REPO/sidecar"
-exec uv run --directory "$SC" python -m confluence_export_sidecar
-`;
-
-  fs.mkdirSync(binariesDir, { recursive: true });
-  fs.writeFileSync(dest, content, { mode: 0o755 });
-  console.log(`Created dev sidecar shim: ${path.relative(root, dest)}`);
-}
-
 console.log("=== export-wiki setup ===\n");
 
-console.log("[1/4] Node dependencies");
+console.log("[1/3] Node dependencies");
 run("npm install");
 
-console.log("\n[2/4] Rust toolchain");
+console.log("\n[2/3] Rust toolchain");
 if (!hasCommand("rustc")) {
   console.error(
     "rustc not found. Install Rust from https://rustup.rs/ (macOS: also run xcode-select --install)",
   );
   process.exit(1);
 }
-const triple = hostTriple();
-if (triple) {
-  console.log(`  host triple: ${triple}`);
-}
-
-console.log("\n[3/4] Python sidecar (uv)");
+console.log("\n[3/3] Python sidecar (uv)");
 let env = uvEnv();
 if (!resolveUvBin(env)) {
   installUv();
@@ -108,9 +72,6 @@ if (!uv) {
   process.exit(1);
 }
 run(`"${uv}" sync --extra dev`, { cwd: sidecarDir, env });
-
-console.log("\n[4/4] Dev sidecar shim");
-ensureDevShim(triple);
 
 console.log("\n=== setup complete ===");
 console.log("Start the desktop app:  npm start");

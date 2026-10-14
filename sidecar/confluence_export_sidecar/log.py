@@ -61,12 +61,15 @@ class JsonLogFormatter(logging.Formatter):
         message = record.getMessage()
         if record.exc_info:
             message += "\n" + self.formatException(record.exc_info)
-        return json.dumps({
+        entry = {
             "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
             "level": {"WARNING": "warn", "CRITICAL": "error"}.get(record.levelname, record.levelname.lower()),
             "source": record.name,
             "message": redact_log_message(message),
-        }, ensure_ascii=False)
+        }
+        if hasattr(record, "export_progress"):
+            entry["progress"] = record.export_progress
+        return json.dumps(entry, ensure_ascii=False)
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -49,18 +49,22 @@ macOS developers also need Xcode Command Line Tools (`xcode-select --install`).
 ### Quick Start
 
 ```bash
-# Install dependencies (Node, uv sidecar, dev shim)
+# Install dependencies (Node and Python virtualenv)
 npm run setup
 
 # Run in development mode
 npm start
 ```
 
+Normal development skips the optional Connector plugin. Enable it for UI/IPC inspection with `npm start -- --features dev-connector`. Keep the app running when editing React/CSS: Vite updates the webview without rebuilding Rust. Vite excludes Rust, Python, build outputs, and scratch files from its watcher. Rust changes still rebuild and restart the app through Tauri; for a frontend-only session, `npm start -- --no-watch` disables Rust watching while keeping Vite HMR.
+
+Development runs Python source directly through `sidecar/.venv`, without PyInstaller or uv startup checks. When Python files change, the directory worker restarts before the next browsing request; new exports use the updated source, and ongoing exports are not interrupted. Production runs the bundled binary beside the app executable. Dependency changes require `uv sync --extra dev` in `sidecar/` and an app restart.
+
 ### Build
 
 ```bash
 # Build the Python sidecar binary, then package the desktop app
-npm run build:mvp
+npm run build
 ```
 
 Other useful scripts:
@@ -71,7 +75,7 @@ Other useful scripts:
 | `npm run typecheck`      | Check frontend TypeScript                                   |
 | `npm run test:sidecar`   | Run Python sidecar tests                                    |
 | `npm run build:frontend` | Build the web UI only                                       |
-| `npm run icon`           | Regenerate app icons from `src-tauri/icons/icon-source.png` |
+| `npm run icon`           | Regenerate app and dev Dock icons without modifying `src-tauri/icons/icon-source.png` |
 
 ### Usage
 
@@ -158,18 +162,22 @@ macOS 开发环境还需 Xcode Command Line Tools（`xcode-select --install`）�
 ### 快速开始
 
 ```bash
-# 安装依赖（Node、Python sidecar、开发 shim）
+# 安装依赖（Node 和 Python 虚拟环境）
 npm run setup
 
 # 开发模式启动
 npm start
 ```
 
+日常开发默认不启用可选的 Connector 插件；需要检查 UI/IPC 时使用 `npm start -- --features dev-connector`。修改 React/CSS 时保持应用运行，Vite 会直接更新 WebView，无需重编译 Rust。Vite 不监听 Rust、Python、构建产物和临时文件。Rust 改动仍由 Tauri 自动重编译并重启应用；只修改前端时，可用 `npm start -- --no-watch` 关闭 Rust 监听，保留 Vite HMR。
+
+开发模式直接使用 `sidecar/.venv` 运行 Python 源码，跳过 PyInstaller 和 uv 启动检查。Python 文件变化后，目录浏览进程会在下一次请求前重建；新导出使用最新源码，进行中的导出不被打断。生产模式使用应用可执行文件旁的打包二进制。依赖变化时，需要在 `sidecar/` 中运行 `uv sync --extra dev` 并重启应用。
+
 ### 构建
 
 ```bash
 # 先构建 Python sidecar，再打包桌面应用
-npm run build:mvp
+npm run build
 ```
 
 其他常用命令：
@@ -180,7 +188,7 @@ npm run build:mvp
 | `npm run typecheck`      | 检查前端 TypeScript                                   |
 | `npm run test:sidecar`   | 运行 Python sidecar 测试                              |
 | `npm run build:frontend` | 仅构建 Web 前端                                       |
-| `npm run icon`           | 从 `src-tauri/icons/icon-source.png` 重新生成应用图标 |
+| `npm run icon`           | 从 `src-tauri/icons/icon-source.png` 生成应用和开发 Dock 图标，不修改源图 |
 
 ### 使用流程
 

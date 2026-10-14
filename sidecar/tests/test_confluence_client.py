@@ -4,10 +4,12 @@ from threading import Barrier, Lock, get_ident
 import pytest
 
 from confluence_export_sidecar.confluence_client import (
+    API_BASE_URL_ENV,
     ConfluenceClient,
     normalize_instance_url,
     normalize_page_tree,
     normalize_spaces,
+    resolve_api_url,
 )
 
 
@@ -59,6 +61,56 @@ def test_sso_uses_session_cookie_jar():
 
     session = confluence.call_args.kwargs["session"]
     assert session.cookies.get_dict() == {"JSESSIONID": "abc", "route": "a=b"}
+
+
+def test_server_sso_client_uses_origin_not_wiki_path(monkeypatch):
+    """Server/DC REST is at the origin; appending /wiki makes session probes hang on SSO."""
+    monkeypatch.delenv(API_BASE_URL_ENV, raising=False)
+    with patch("confluence_export_sidecar.confluence_client.Confluence") as confluence:
+        ConfluenceClient(
+            {
+                "base_url": "https://wiki.heytea.com",
+                "method": "sso",
+                "cookie": "JSESSIONID=abc",
+            }
+        )
+
+    assert confluence.call_args.kwargs["url"] == "https://wiki.heytea.com"
+    assert confluence.call_args.kwargs["cloud"] is False
+
+
+def test_cloud_sso_client_appends_wiki_path(monkeypatch):
+    monkeypatch.delenv(API_BASE_URL_ENV, raising=False)
+    with patch("confluence_export_sidecar.confluence_client.Confluence") as confluence:
+        ConfluenceClient(
+            {
+                "base_url": "https://acme.atlassian.net",
+                "method": "sso",
+                "cookie": "cloud.session.token=abc",
+            }
+        )
+
+    assert confluence.call_args.kwargs["url"] == "https://acme.atlassian.net/wiki"
+    assert confluence.call_args.kwargs["cloud"] is True
+
+
+def test_resolve_api_url_env_overrides_heuristic(monkeypatch):
+    monkeypatch.setenv(API_BASE_URL_ENV, "https://wiki.heytea.com/wiki/")
+    assert resolve_api_url("https://wiki.heytea.com") == "https://wiki.heytea.com/wiki"
+
+
+def test_env_api_base_url_wins_over_server_heuristic(monkeypatch):
+    monkeypatch.setenv(API_BASE_URL_ENV, "https://wiki.heytea.com/wiki")
+    with patch("confluence_export_sidecar.confluence_client.Confluence") as confluence:
+        ConfluenceClient(
+            {
+                "base_url": "https://wiki.heytea.com",
+                "method": "sso",
+                "cookie": "JSESSIONID=abc",
+            }
+        )
+
+    assert confluence.call_args.kwargs["url"] == "https://wiki.heytea.com/wiki"
 
 
 def test_fetch_page_tree_uses_menu_metadata_only():

@@ -7,11 +7,13 @@ import posixpath
 import re
 import tempfile
 import zipfile
+from itertools import accumulate
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote, urlsplit
 
 import yaml
+from markdown_it import MarkdownIt
 
 
 def _name(value: str) -> str:
@@ -75,6 +77,7 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
     for page in pages:
         document_path = paths[str(page["id"])]
         parent = posixpath.dirname(document_path)
+
         for attachment in page.get("attachments", []):
             old_path = attachment["path"]
             if old_path in links:
@@ -99,8 +102,13 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
         document_path = paths[page_id]
         parent = posixpath.dirname(document_path)
 
+        offsets = [0, *accumulate(len(line) for line in page["markdown"].splitlines(keepends=True))]
+        code_ranges = [(offsets[token.map[0]], offsets[token.map[1]])
+                       for token in MarkdownIt("commonmark").parse(page["markdown"])
+                       if token.type in {"fence", "code_block"} and token.map]
+
         def rewrite(match: re.Match[str]) -> str:
-            if match.group("code"):
+            if match.group("code") or any(start <= match.start() < end for start, end in code_ranges):
                 return match.group(0)
             href = match.group("href")
             parsed = urlsplit(unquote(href.strip("<>")))
@@ -116,7 +124,7 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
             return match.group("prefix") + href
 
         markdown = re.sub(
-            r"(?P<code>^(?P<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?^(?P=fence)[^\n]*$|(?P<ticks>`+)[^`]*?(?P=ticks)|^ {4}[^\n]*)"
+            r"(?P<code>(?P<ticks>`+)[^`]*?(?P=ticks))"
             r"|(?P<prefix>\]\(|^ {0,3}\[[^\]\n]+\]:[ \t]*)(?P<href><?[^\s)>]+>?)",
             rewrite, page["markdown"], flags=re.MULTILINE,
         )

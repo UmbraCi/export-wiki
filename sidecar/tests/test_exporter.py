@@ -1,8 +1,13 @@
 import zipfile
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+import pytest
+from requests.exceptions import ChunkedEncodingError, ConnectionError, HTTPError, Timeout
 
 from confluence_export_sidecar.exporter import (
     _configure_cme,
+    _download_attachment_content,
     build_attachment_manifest,
     build_exported_page,
 )
@@ -45,3 +50,44 @@ def test_sso_export_uses_official_session_cookie_config():
 
     auth = create_confluence.call_args.args[1]
     assert auth.session_cookies.get_secret_value() == "JSESSIONID=abc"
+
+
+@pytest.mark.parametrize("error", [ChunkedEncodingError, ConnectionError, Timeout])
+def test_attachment_network_failures_have_bounded_retries(error):
+    attachment = SimpleNamespace(id="99", filename="99.png", download_link="/download/99.png")
+    client = Mock(url="https://wiki.test")
+    client.session.get.side_effect = error("interrupted")
+    with patch("confluence_export_sidecar.exporter.get_thread_confluence", return_value=client), \
+         patch("confluence_export_sidecar.attachment_download.sleep") as sleep:
+        assert _download_attachment_content(attachment, client.url) is None
+    assert client.session.get.call_count == 3
+    assert [call.args[0] for call in sleep.call_args_list] == [1, 2]
+
+
+def test_attachment_http_failure_is_not_retried():
+    attachment = SimpleNamespace(id="99", filename="99.png", download_link="/download/99.png")
+    response = Mock(status_code=403)
+    response.raise_for_status.side_effect = HTTPError("403 Forbidden")
+    client = Mock(url="https://wiki.test")
+    client.session.get.return_value = response
+    with patch("confluence_export_sidecar.exporter.get_thread_confluence", return_value=client), \
+         patch("confluence_export_sidecar.attachment_download.sleep") as sleep:
+        assert _download_attachment_content(attachment, client.url) is None
+    client.session.get.assert_called_once()
+    response.close.assert_called_once()
+    sleep.assert_not_called()
+
+
+def test_attachment_body_interruption_retries_and_closes_responses():
+    attachment = SimpleNamespace(id="99", filename="99.png", download_link="/download/99.png")
+    interrupted = Mock(status_code=200, headers={})
+    interrupted.iter_content.side_effect = ChunkedEncodingError("incomplete body")
+    complete = Mock(status_code=200, headers={})
+    complete.iter_content.return_value = [b"image"]
+    client = Mock(url="https://wiki.test")
+    client.session.get.side_effect = [interrupted, complete]
+    with patch("confluence_export_sidecar.exporter.get_thread_confluence", return_value=client), \
+         patch("confluence_export_sidecar.attachment_download.sleep"):
+        assert _download_attachment_content(attachment, client.url) == b"image"
+    interrupted.close.assert_called_once()
+    complete.close.assert_called_once()

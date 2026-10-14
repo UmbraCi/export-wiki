@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,8 @@ import requests
 from atlassian import Confluence
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+# Escape hatch when Cloud/Server /wiki heuristic is wrong (SSO probe + browse REST).
+API_BASE_URL_ENV = "CONFLUENCE_API_BASE_URL"
 
 
 class AuthenticationRequired(ValueError):
@@ -59,6 +62,22 @@ def normalize_instance_url(base_url: str) -> str:
         raise ValueError("Confluence URL must include a host")
 
     return f"https://{parsed.hostname}"
+
+
+def resolve_api_url(normalized_origin: str) -> str:
+    """Pick REST base: env override, else Cloud `/wiki`, else Server origin."""
+    override = os.environ.get(API_BASE_URL_ENV, "").strip().rstrip("/")
+    if override:
+        parsed = urlparse(override)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError(f"{API_BASE_URL_ENV} must be an https URL with a host")
+        path = parsed.path.rstrip("/") if parsed.path not in {"", "/"} else ""
+        return f"https://{parsed.hostname}{path}"
+
+    cloud = ".atlassian.net" in normalized_origin
+    if cloud and "/wiki" not in normalized_origin:
+        return f"{normalized_origin}/wiki"
+    return normalized_origin
 
 
 def normalize_spaces(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -139,8 +158,9 @@ class ConfluenceClient:
         base_url = normalize_instance_url(raw_base_url)
 
         method = str(self._auth.get("method", ""))
-        wiki_url = f"{base_url}/wiki" if "/wiki" not in base_url else base_url
         cloud = ".atlassian.net" in base_url
+        api_url = resolve_api_url(base_url)
+        _auth_diag(f"ConfluenceClient api_url={api_url!r} cloud={cloud}")
 
         if method == "api_token":
             username = self._auth.get("username") or ""
@@ -148,7 +168,7 @@ class ConfluenceClient:
             if not username or not api_token:
                 raise ValueError("API token auth requires username and api_token")
             return Confluence(
-                url=wiki_url,
+                url=api_url,
                 username=username,
                 password=api_token,
                 cloud=cloud,
@@ -158,7 +178,7 @@ class ConfluenceClient:
         if method in {"cookie", "sso"} and cookie:
             session = requests.Session()
             session.cookies.update(_cookie_values(cookie))
-            return Confluence(url=wiki_url, session=session, cloud=cloud)
+            return Confluence(url=api_url, session=session, cloud=cloud)
 
         raise ValueError(f"Unsupported or incomplete auth method: {method!r}")
 

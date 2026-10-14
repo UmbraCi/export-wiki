@@ -13,6 +13,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**', '**/sidecar/**', '**/.build/**', '**/.scratch/**'],
+    },
   },
   build: {
     outDir: '.build/frontend',

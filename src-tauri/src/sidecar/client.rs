@@ -47,25 +47,33 @@ pub fn auth_payload(auth: &SidecarAuthConfig) -> Value {
 }
 
 pub fn resolve_sidecar_program() -> Result<PathBuf, String> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let triple = match (std::env::consts::ARCH, std::env::consts::OS) {
-        ("aarch64", "macos") => "aarch64-apple-darwin",
-        ("x86_64", "macos") => "x86_64-apple-darwin",
-        ("aarch64", "linux") => "aarch64-unknown-linux-gnu",
-        ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
-        ("x86_64", "windows") => "x86_64-pc-windows-msvc",
-        (arch, os) => return Err(format!("unsupported sidecar target {arch}-{os}")),
-    };
-
-    let candidate = manifest_dir.join(format!("binaries/cme-sidecar-{triple}"));
+    #[cfg(feature = "dev-sidecar")]
+    let candidate = super::dev::program();
+    #[cfg(not(feature = "dev-sidecar"))]
+    let candidate = std::env::current_exe()
+        .map_err(|error| format!("resolve app executable: {error}"))?
+        .with_file_name(format!("cme-sidecar{}", std::env::consts::EXE_SUFFIX));
     if candidate.exists() {
         return Ok(candidate);
     }
 
     Err(format!(
-        "sidecar binary not found at {}",
+        "sidecar executable not found at {} (development: run npm run setup)",
         candidate.display()
     ))
+}
+
+fn sidecar_command(program: &OsStr) -> Command {
+    let command = Command::new(program);
+    #[cfg(feature = "dev-sidecar")]
+    let mut command = command;
+    #[cfg(feature = "dev-sidecar")]
+    if Path::new(program) == super::dev::program() {
+        command
+            .current_dir(super::dev::source_dir())
+            .args(["-m", "confluence_export_sidecar"]);
+    }
+    command
 }
 
 pub struct SidecarClient {
@@ -78,9 +86,37 @@ pub struct SidecarLog {
     pub level: String,
     pub source: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<crate::contracts::ExportProgressEvent>,
 }
 
 type LogCallback<'a> = &'a (dyn Fn(SidecarLog) + Send + Sync);
+
+// PyInstaller's bootloader forks: killing only its parent leaves the exporter running.
+struct ExportProcessTree(Option<u32>);
+
+impl ExportProcessTree {
+    fn stop(&mut self) -> Result<(), String> {
+        if let Some(pid) = self.0.take() {
+            #[cfg(unix)]
+            let status = std::process::Command::new("/bin/kill")
+                .args(["-KILL", "--", &format!("-{pid}")])
+                .status();
+            #[cfg(windows)]
+            let status = std::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .status();
+            status.map_err(|error| format!("stop export process tree: {error}"))?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for ExportProcessTree {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
 
 fn request_secrets(payload: &str) -> Vec<String> {
     let request: Value = serde_json::from_str(payload).unwrap_or(Value::Null);
@@ -130,11 +166,15 @@ struct DirectoryProcess {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    #[cfg(feature = "dev-sidecar")]
+    source_stamp: super::dev::SourceStamp,
 }
 
 impl DirectoryProcess {
     fn spawn(program: &Path) -> Result<Self, String> {
-        let mut child = Command::new(program)
+        #[cfg(feature = "dev-sidecar")]
+        let source_stamp = Self::source_stamp(program)?;
+        let mut child = sidecar_command(program.as_os_str())
             .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -147,7 +187,18 @@ impl DirectoryProcess {
             child,
             stdin,
             stdout: BufReader::new(stdout),
+            #[cfg(feature = "dev-sidecar")]
+            source_stamp,
         })
+    }
+
+    #[cfg(feature = "dev-sidecar")]
+    fn source_stamp(program: &Path) -> Result<super::dev::SourceStamp, String> {
+        if program != super::dev::program() {
+            return Ok(Vec::new());
+        }
+        super::dev::source_stamp(&super::dev::source_dir().join("confluence_export_sidecar"))
+            .map_err(|error| format!("check sidecar source changes: {error}"))
     }
 
     async fn exchange(&mut self, line: &str, request_id: &str) -> Result<SidecarResponse, String> {
@@ -201,12 +252,20 @@ impl DirectoryWorker {
             Some(process) => process,
             None => DirectoryProcess::spawn(program)?,
         };
-        if process
+        let exited = process
             .child
             .try_wait()
             .map_err(|error| format!("check directory sidecar: {error}"))?
-            .is_some()
-        {
+            .is_some();
+        #[cfg(feature = "dev-sidecar")]
+        let source_changed = process.source_stamp != DirectoryProcess::source_stamp(program)?;
+        #[cfg(not(feature = "dev-sidecar"))]
+        let source_changed = false;
+        if exited || source_changed {
+            if !exited {
+                process.child.kill().await
+                    .map_err(|error| format!("restart development sidecar: {error}"))?;
+            }
             process = DirectoryProcess::spawn(program)?;
         }
         let response = tokio::select! {
@@ -345,6 +404,7 @@ impl SidecarClient {
         &self,
         auth: &SidecarAuthConfig,
         page_ids: &[String],
+        output_dir: &str,
         format: &str,
         include_attachments: bool,
         cancelled: &AtomicBool,
@@ -355,6 +415,7 @@ impl SidecarClient {
             json!({
                 "auth": auth_payload(auth),
                 "page_ids": page_ids,
+                "output_dir": output_dir,
                 "format": format,
                 "include_attachments": include_attachments,
             }),
@@ -425,13 +486,16 @@ async fn run_one_request_inner(
 ) -> Result<SidecarResponse, String> {
     let payload = request_json_line.as_ref();
     let secrets = request_secrets(payload);
-    let mut child = Command::new(program.as_ref())
-        .kill_on_drop(true)
+    let mut command = sidecar_command(program.as_ref());
+    #[cfg(unix)]
+    command.process_group(0);
+    let mut child = command.kill_on_drop(true)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("spawn sidecar process: {e}"))?;
+    let mut process_tree = ExportProcessTree(child.id());
 
     {
         let mut stdin = child
@@ -481,6 +545,7 @@ async fn run_one_request_inner(
                     level: "warn".into(),
                     source: "sidecar.stderr".into(),
                     message: line,
+                    progress: None,
                 });
             entry.message = redact_values(&entry.message, &secrets);
             if let Some(on_log) = on_log {
@@ -509,7 +574,10 @@ async fn run_one_request_inner(
     let (status, diagnostics) = if let Some(cancelled) = cancelled {
         loop {
             if cancelled.load(Ordering::SeqCst) {
-                // kill_on_drop stops the process when the cancelled exchange is dropped.
+                process_tree.stop()?;
+                // Wait for pipes to close and the bootloader to exit before permitting resume.
+                let _ = tokio::time::timeout(Duration::from_secs(5), exchange.as_mut()).await
+                    .map_err(|_| "export process did not stop; retry pause".to_string())?;
                 return Err("EXPORT_CANCELLED".into());
             }
             tokio::select! {
@@ -521,6 +589,7 @@ async fn run_one_request_inner(
         exchange.as_mut().await?
     };
     drop(exchange);
+    process_tree.0 = None;
     let mut response = parse_response(&line)
         .map_err(|e| format!("decode sidecar response (exit {status}): {e}\n{diagnostics}"))?;
     response.error = response
@@ -547,6 +616,60 @@ async fn run_one_request_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "dev-sidecar")]
+    #[test]
+    fn development_command_uses_virtualenv_and_source_module() {
+        let program = super::super::dev::program();
+        let command = sidecar_command(program.as_os_str());
+        let command = command.as_std();
+        assert_eq!(command.get_program(), program.as_os_str());
+        assert_eq!(
+            command.get_current_dir(),
+            Some(super::super::dev::source_dir().as_path())
+        );
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["-m", "confluence_export_sidecar"]
+        );
+    }
+
+    #[cfg(all(unix, feature = "dev-sidecar"))]
+    #[tokio::test]
+    async fn directory_worker_restarts_when_source_stamp_changes() {
+        let (_directory, program) = echo_sidecar();
+        let worker = DirectoryWorker::default();
+        let line = build_request_line("ping", "reload", json!({}));
+        let first = worker.request(&program, &line, "reload").await.unwrap();
+        worker.process.lock().await.as_mut().unwrap().source_stamp.push((
+            PathBuf::from("old.py"),
+            std::time::SystemTime::UNIX_EPOCH,
+            0,
+        ));
+        let second = worker.request(&program, &line, "reload").await.unwrap();
+        assert_ne!(first.payload["pid"], second.payload["pid"]);
+        let third = worker.request(&program, &line, "reload").await.unwrap();
+        assert_eq!(second.payload["pid"], third.payload["pid"]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancellation_stops_forked_exporter_before_returning() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let program = directory.path().join("forking-sidecar.sh");
+        let marker = directory.path().join("orphan-wrote-output");
+        std::fs::write(&program, format!(
+            "#!/bin/sh\n(sleep 1; touch '{}') &\nprintf 'export started\\n' >&2\nwait\n", marker.display()
+        )).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let cancelled = AtomicBool::new(false);
+        let on_log = |_entry| cancelled.store(true, Ordering::SeqCst);
+        let result = run_one_request_inner(&program, "{}", Some(&cancelled), Some(&on_log)).await;
+        assert_eq!(result.unwrap_err(), "EXPORT_CANCELLED");
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        assert!(!marker.exists(), "forked exporter survived pause and wrote output");
+    }
 
     #[cfg(unix)]
     #[tokio::test]

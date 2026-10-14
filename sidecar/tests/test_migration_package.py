@@ -116,6 +116,18 @@ def test_duplicate_attachment_titles_remain_unique_and_links_follow_renames(tmp_
         assert "![a](../产品/attachments/screenshot.png)" in markdown
 
 
+def test_nested_list_images_are_rewritten_without_changing_indented_code(tmp_path):
+    markdown = "- Topic\n\n  - Detail\n\n      ![](attachments/99.png)\n\nOutside\n\n    [example](2.md)\n"
+    package = publish_markdown_package(output_dir=tmp_path, pages=[
+        page(1, ["Space", "Guide"], markdown, attachments=[{"path": "attachments/99.png", "title": "image.png", "content": b"image"}]),
+        page(2, ["Space", "Other"]),
+    ])
+    with zipfile.ZipFile(package) as archive:
+        result = archive.read("Space/Guide.md").decode()
+    assert "      ![](attachments/image.png)" in result
+    assert "    [example](2.md)" in result
+
+
 def test_real_confluence_converter_produces_resolvable_links(tmp_path):
     from confluence_markdown_exporter.confluence import Page, Space, Attachment
 
@@ -158,6 +170,55 @@ def test_failed_attachment_does_not_replace_existing_package(tmp_path):
         with pytest.raises(ValueError, match="could not be downloaded"):
             export_migration_package(page_ids=["1"], auth={}, output_dir=str(tmp_path))
     assert target.read_bytes() == b"existing"
+
+
+def test_failed_export_resumes_completed_pages_and_keeps_original_package(tmp_path):
+    first = SimpleNamespace(id=1, title="First", space=SimpleNamespace(name="Space", key="P"),
+                            ancestors=[], markdown="first", _attachments_for_export=lambda: [])
+    second = SimpleNamespace(id=2, title="Second", space=first.space, ancestors=[],
+                             markdown="second", _attachments_for_export=lambda: [])
+    target = tmp_path / "confluence-migration-1-2.zip"
+    target.write_bytes(b"existing")
+    with patch("confluence_export_sidecar.exporter._configure_cme", return_value="https://wiki.test"), \
+         patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=[first, ConnectionError("offline")]):
+        with pytest.raises(ConnectionError):
+            export_migration_package(page_ids=["1", "2"], auth={}, output_dir=str(tmp_path))
+    assert target.read_bytes() == b"existing"
+    with patch("confluence_export_sidecar.exporter._configure_cme", return_value="https://wiki.test"), \
+         patch("confluence_export_sidecar.exporter.Page.from_id", return_value=second) as fetch:
+        result = export_migration_package(page_ids=["1", "2"], auth={}, output_dir=str(tmp_path))
+    fetch.assert_called_once_with(2, "https://wiki.test")
+    with zipfile.ZipFile(result["package_path"]) as archive:
+        assert set(archive.namelist()) == {"Space/First.md", "Space/Second.md"}
+    assert not [path for path in (tmp_path / ".export-wiki-resume").iterdir() if path.is_dir()]
+
+
+def test_interrupted_attachment_download_recovers_and_publishes_complete_package(tmp_path):
+    from unittest.mock import Mock
+    from requests.exceptions import ChunkedEncodingError
+
+    attachment = SimpleNamespace(id="99", title="99.png", filename=".png",
+                                 download_link="/download/attachments/1/99.png",
+                                 export_path=Path("attachments/99.png"))
+    source = SimpleNamespace(id=1, title="指南", space=SimpleNamespace(name="产品", key="P"),
+                             ancestors=[], markdown="![截图](attachments/99.png)",
+                             _attachments_for_export=lambda: [attachment])
+    response = Mock(status_code=200, headers={})
+    response.iter_content.return_value = [b"complete image"]
+    client = Mock(url="https://wiki.test")
+    client.session.get.side_effect = [
+        ChunkedEncodingError("Connection broken: IncompleteRead(39227 bytes read, 214969 more expected)"),
+        response,
+    ]
+    with patch("confluence_export_sidecar.exporter._configure_cme", return_value=client.url), \
+         patch("confluence_export_sidecar.exporter.Page.from_id", return_value=source), \
+         patch("confluence_export_sidecar.exporter.get_thread_confluence", return_value=client), \
+         patch("confluence_export_sidecar.attachment_download.sleep"):
+        result = export_migration_package(page_ids=["1"], auth={}, output_dir=str(tmp_path))
+    assert client.session.get.call_count == 2
+    assert result["attachments"] == 1
+    with zipfile.ZipFile(result["package_path"]) as archive:
+        assert archive.read("产品/attachments/99.png") == b"complete image"
 
 
 def test_exporter_uses_stable_converter_paths_and_preserves_ancestor_identity(tmp_path):

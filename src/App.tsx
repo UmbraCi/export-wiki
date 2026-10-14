@@ -6,6 +6,8 @@ import { initSsoEventListeners, useAuthStore } from './stores/authStore'
 import { useConfigStore } from './stores/configStore'
 import { authRequiredViews, useNavStore } from './stores/navStore'
 import SpaceBrowserFooter from './components/SpaceBrowser/Footer'
+import { useExportStore } from './stores/exportStore'
+import { useSelectionStore } from './stores/selectionStore'
 
 const AuthPanel = lazy(() => import('./components/AuthPanel'))
 const SpaceBrowser = lazy(() => import('./components/SpaceBrowser'))
@@ -32,7 +34,16 @@ function App() {
           useAuthStore.getState().status.authenticated &&
           useNavStore.getState().activeView === 'authentication'
         ) {
-          setActiveView('spaces')
+          const pending = useExportStore.getState().resumeOptions
+          if (pending) {
+            useSelectionStore.setState({ selectedPageIds: pending.pageIds })
+            useExportStore.getState().setOptions({
+              outputDir: pending.outputDir,
+              format: pending.format,
+              includeAttachments: pending.includeAttachments,
+            })
+          }
+          setActiveView(pending ? 'export' : 'spaces')
         }
       })
   }, [loadConfig, setActiveView])

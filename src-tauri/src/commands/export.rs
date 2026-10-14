@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -15,6 +15,14 @@ use crate::state::AppState;
 use serde_json::{json, Value};
 
 const EMPTY_SELECTION: &str = codes::EMPTY_SELECTION;
+
+struct ExportGuard<'a>(&'a AtomicBool);
+
+impl Drop for ExportGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,10 +131,21 @@ pub async fn export_pages(
         return Err(AppError::new(codes::OUTPUT_DIR_REQUIRED).into_invoke_error());
     }
 
+    if state
+        .export_running
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(AppError::new("EXPORT_IN_PROGRESS").into_invoke_error());
+    }
+    let _guard = ExportGuard(&state.export_running);
     let auth = require_sidecar_auth(&state)?;
     state.export_cancelled.store(false, Ordering::SeqCst);
     let client = SidecarClient::resolve_default()?;
     let on_log = |entry: SidecarLog| {
+        if let Some(progress) = &entry.progress {
+            let _ = emit_progress(&app, progress.clone());
+        }
         let _ = app.emit_to("main", "export-log", entry);
     };
     let export_id = Uuid::new_v4().to_string();
@@ -191,7 +210,9 @@ pub async fn export_pages(
                 progress: 100,
                 stats: stats.clone(),
                 message_key: Some("export.complete".into()),
-                message_params: Some(json!({ "exported": total, "failed": 0, "attachments": stats.attachments })),
+                message_params: Some(
+                    json!({ "exported": total, "failed": 0, "attachments": stats.attachments }),
+                ),
                 message: None,
             },
         )?;
@@ -215,6 +236,7 @@ pub async fn export_pages(
         .export_pages_with_cancel(
             &auth,
             &options.page_ids,
+            &options.output_dir,
             format,
             options.include_attachments,
             &state.export_cancelled,
@@ -280,6 +302,24 @@ pub async fn export_pages(
 
     if stats.exported + stats.failed < total {
         stats.skipped = total.saturating_sub(stats.exported + stats.failed);
+    }
+
+    if stats.exported == total {
+        if let Some(path) = response
+            .payload
+            .get("checkpoint_path")
+            .and_then(Value::as_str)
+        {
+            let checkpoint = PathBuf::from(path);
+            if checkpoint.starts_with(
+                output_dir
+                    .canonicalize()
+                    .unwrap_or(output_dir.clone())
+                    .join(".export-wiki-resume"),
+            ) {
+                let _ = std::fs::remove_dir_all(checkpoint);
+            }
+        }
     }
 
     emit_progress(

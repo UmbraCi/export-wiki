@@ -18,20 +18,18 @@ const DEV_CONNECTOR_CAPABILITY: &str =
     include_str!("../capabilities-dev/dev-connector.json");
 
 fn main() {
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init());
 
     #[cfg(feature = "dev-connector")]
-    {
-        builder = builder.plugin(tauri_plugin_connector::init());
-    }
+    let builder = builder.plugin(tauri_plugin_connector::init());
 
     builder
         .manage(AppState::default())
-        .setup(|app| {
+        .setup(|_app| {
             #[cfg(feature = "dev-connector")]
-            app.add_capability(DEV_CONNECTOR_CAPABILITY)
+            _app.add_capability(DEV_CONNECTOR_CAPABILITY)
                 .map_err(|e| format!("dev-connector capability: {e}"))?;
             Ok(())
         })

@@ -26,8 +26,8 @@
     "title": "导出进度",
     "subtitle": "查看导出状态、统计和日志",
     "progressLabel": "进度",
-    "stop": "停止导出",
-    "stopping": "正在停止…",
+    "stop": "暂停导出",
+    "stopping": "正在暂停…",
     "logTitle": "导出日志",
     "emptyLog": "开始导出后可在此查看进度日志",
     "stats": {
@@ -36,7 +36,10 @@
       "skipped": "已跳过",
       "failed": "失败",
       "files": "文件"
-    }
+    },
+    "resume": "继续导出",
+    "retry": "重试未完成部分",
+    "saved": "已自动保存导出进度，继续时会复用已完成页面和附件。"
   },
   "logs": {
     "level": "最低日志等级",
@@ -52,13 +55,14 @@
     "download": "保存日志",
     "noMatches": "没有符合筛选条件的日志",
     "retention": "显示 {{count}} / {{total}} 条。本次运行保留最近 5,000 条日志。等级仅筛选显示；复制和保存使用当前筛选结果。",
-    "starting": "开始导出：{{count}} 个页面，格式={{format}}",
-    "waiting": "已有 {{seconds}} 秒没有新的导出活动。最后一步可能仍在等待服务器响应，可尝试停止导出。",
-    "stopping": "已请求取消，正在停止导出进程",
-    "cancelled": "导出已取消"
+    "starting": "开始导出：{{count}} 个页面，格式={{format}}，文档 ID=[{{pageIds}}]",
+    "waiting": "已有 {{seconds}} 秒没有新活动，正在等待服务器响应；可以暂停，稍后继续。",
+    "stopping": "正在暂停导出，已下载内容会自动保存",
+    "cancelled": "导出已暂停，可继续未完成部分"
   },
   "queued_one": "已将 {{count}} 个页面加入导出队列",
   "queued_other": "已将 {{count}} 个页面加入导出队列",
   "writing": "正在写入 {{filename}}",
-  "complete": "导出完成：已导出 {{exported}}，失败 {{failed}}，附件 {{attachments}}"
+  "complete": "导出完成：已导出 {{exported}}，失败 {{failed}}，附件 {{attachments}}",
+  "checkpoint": "已保存 {{completed}} / {{total}} 个页面"
 }

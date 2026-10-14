@@ -17,6 +17,9 @@ function ProgressPanel() {
     error,
     reset,
     stopExport,
+    resumeOptions,
+    isPaused,
+    resumeExport,
   } = useExportStore()
 
   return (
@@ -77,6 +80,12 @@ function ProgressPanel() {
             </Alert>
           )}
 
+          {!isExporting && resumeOptions && (
+            <Alert>
+              <AlertDescription>{t('export:progress.saved')}</AlertDescription>
+            </Alert>
+          )}
+
           <LogPanel />
         </div>
 
@@ -92,6 +101,15 @@ function ProgressPanel() {
               {isCancelling
                 ? t('export:progress.stopping')
                 : t('export:progress.stop')}
+            </Button>
+          )}
+          {!isExporting && resumeOptions && (
+            <Button onClick={() => void resumeExport()}>
+              {t(
+                isPaused || (!error && stats.failed === 0)
+                  ? 'export:progress.resume'
+                  : 'export:progress.retry',
+              )}
             </Button>
           )}
           <Button variant="secondary" onClick={reset} disabled={isExporting}>

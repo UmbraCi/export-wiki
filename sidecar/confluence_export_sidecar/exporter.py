@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 import re
+import shutil
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -22,6 +24,9 @@ from confluence_markdown_exporter.utils.app_data_store import (
     ExportConfig,
 )
 from pydantic import SecretStr
+
+from confluence_export_sidecar.attachment_download import download_attachment
+from confluence_export_sidecar.checkpoint import ExportCheckpoint
 
 from confluence_export_sidecar.log import get_logger
 from confluence_export_sidecar.migration_package import publish_markdown_package
@@ -138,22 +143,17 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool, *, migration
     return base_url
 
 
-def _download_attachment_content(attachment: Any, base_url: str) -> bytes | None:
-    log.info("downloading attachment: %s", attachment.filename)
+def _download_attachment_content(attachment: Any, base_url: str, directory: Path | None = None) -> bytes | None:
+    log.info("downloading attachment: id=%s filename=%s", attachment.id, attachment.filename)
     client = get_thread_confluence(base_url)
     try:
-        response = client.request(
-            method="GET",
-            path=client.url + attachment.download_link,
-            absolute=True,
-            advanced_mode=True,
-        )
-        response.raise_for_status()
+        if directory is not None:
+            return download_attachment(client, attachment, directory)
+        with tempfile.TemporaryDirectory(prefix="wiki-attachment-") as temporary:
+            return download_attachment(client, attachment, Path(temporary))
     except Exception as exc:  # noqa: BLE001
-        log.warning("attachment download failed: %s — %s", attachment.filename, exc)
+        log.warning("attachment download failed: id=%s filename=%s — %s", attachment.id, attachment.filename, exc)
         return None
-    log.debug("downloaded attachment: %s (%d bytes)", attachment.filename, len(response.content))
-    return response.content
 
 
 def build_exported_page(
@@ -191,6 +191,7 @@ def export_page(
     auth: dict[str, Any],
     include_attachments: bool,
     export_format: str = "markdown",
+    download_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Export one Confluence page to Markdown or HTML and attachment manifests."""
     log.info("exporting page_id=%s format=%s attachments=%s", page_id, export_format, include_attachments)
@@ -208,9 +209,9 @@ def export_page(
         attachments_list = list(page._attachments_for_export())  # noqa: SLF001
         log.info("found %d attachment(s) for page %s", len(attachments_list), page_id)
         for attachment in attachments_list:
-            attachment_content = _download_attachment_content(attachment, base_url)
+            attachment_content = _download_attachment_content(attachment, base_url, download_dir)
             if attachment_content is None:
-                continue
+                raise ValueError(f"Attachment {attachment.id} could not be downloaded")
             # Confluence DC/Server doesn't populate fileId, so filename
             # may be just an extension (e.g. ".png").  Fall back to id.
             raw_name = attachment.filename
@@ -236,12 +237,29 @@ def export_pages(
     page_ids: list[str],
     include_attachments: bool,
     export_format: str = "markdown",
+    output_dir: str | None = None,
 ) -> list[dict[str, Any]]:
     """Export multiple pages for the sidecar export_pages command."""
-    return [
-        export_page(page_id, auth, include_attachments, export_format)
-        for page_id in page_ids
-    ]
+    log.info("export selection: format=%s page_ids=%s", export_format, page_ids)
+    checkpoint = ExportCheckpoint(output_dir, auth, page_ids, export_format, include_attachments) if output_dir else None
+    with checkpoint if checkpoint else nullcontext():
+        return _export_pages(auth, page_ids, include_attachments, export_format, checkpoint)
+
+
+def _export_pages(auth, page_ids, include_attachments, export_format, checkpoint):
+    pages = []
+    for page_id in page_ids:
+        exported = checkpoint.load_page(page_id) if checkpoint else None
+        if exported is None:
+            exported = export_page(page_id, auth, include_attachments, export_format,
+                                   checkpoint.downloads if checkpoint else None)
+            if checkpoint:
+                checkpoint.save_page(page_id, exported)
+        else:
+            log.info("resuming saved page_id=%s", page_id)
+        pages.append(exported)
+        _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
+    return pages
 
 
 
@@ -250,9 +268,21 @@ def export_migration_package(
     include_attachments: bool = True,
 ) -> dict[str, Any]:
     """Fetch selected pages and publish a hierarchical Markdown ZIP."""
+    log.info("export selection: format=migration_package page_ids=%s", page_ids)
+    with ExportCheckpoint(output_dir, auth, page_ids, "migration_package", include_attachments) as checkpoint:
+        return _export_migration_package(page_ids, auth, output_dir, include_attachments, checkpoint)
+
+
+def _export_migration_package(page_ids, auth, output_dir, include_attachments, checkpoint):
     base_url = _configure_cme(auth, include_attachments, migration=True)
     pages = []
     for page_id in page_ids:
+        saved = checkpoint.load_page(page_id)
+        if saved is not None:
+            log.info("resuming saved page_id=%s", page_id)
+            pages.append(saved)
+            _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
+            continue
         log.info("fetching migration page_id=%s", page_id)
         page = Page.from_id(int(page_id), base_url)
         if page.title == "Page not accessible":
@@ -260,12 +290,12 @@ def export_migration_package(
         attachments = []
         if include_attachments:
             for attachment in page._attachments_for_export():  # noqa: SLF001
-                content = _download_attachment_content(attachment, base_url)
+                content = _download_attachment_content(attachment, base_url, checkpoint.downloads)
                 if content is None:
                     raise ValueError(f"Attachment {attachment.id} could not be downloaded")
                 attachments.append({"path": attachment.export_path.as_posix(), "title": attachment.title, "content": content})
         log.info("converting migration page_id=%s", page_id)
-        pages.append({
+        exported = {
             "id": str(page.id),
             "title": page.title,
             "source_path": [page.space.name, *(ancestor.title for ancestor in page.ancestors), page.title],
@@ -273,11 +303,26 @@ def export_migration_package(
             "base_url": base_url,
             "markdown": page.markdown,
             "attachments": attachments,
-        })
+        }
+        checkpoint.save_page(page_id, exported)
+        pages.append(exported)
+        _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
     log.info("writing migration package (%d pages)", len(pages))
     package_path = publish_markdown_package(output_dir=output_dir, pages=pages)
+    shutil.rmtree(checkpoint.root)
     return {
         "package_path": str(package_path),
         "attachments": len({attachment["path"]
                             for page in pages for attachment in page["attachments"]}),
     }
+
+
+def _log_checkpoint_progress(page_id: str, completed: int, total: int, pages: list[dict]) -> None:
+    attachments = sum(len(page["attachments"]) for page in pages)
+    log.info("saved page_id=%s completed=%d/%d attachments=%d", page_id, completed, total, attachments,
+             extra={"export_progress": {
+                 "pageId": page_id, "status": "fetching", "progress": completed * 95 // total,
+                 "stats": {"total": total, "exported": completed, "skipped": 0,
+                           "failed": 0, "attachments": attachments},
+                 "messageKey": "export.checkpoint", "messageParams": {"completed": completed, "total": total},
+             }})

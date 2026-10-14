@@ -72,6 +72,8 @@ struct SessionProbeState {
     last_probe_at: Mutex<Option<Instant>>,
     cached_valid: Mutex<Option<bool>>,
     auto_complete_triggered: AtomicBool,
+    /// Prevents overlapping sidecar probes (cold-start flood → 20s timeouts).
+    probe_in_flight: AtomicBool,
 }
 
 #[derive(Clone, Default)]
@@ -98,6 +100,9 @@ impl SsoSessionManager {
         self.probe_state
             .auto_complete_triggered
             .store(false, Ordering::SeqCst);
+        self.probe_state
+            .probe_in_flight
+            .store(false, Ordering::SeqCst);
     }
 
     fn cached_probe_valid(&self) -> Option<bool> {
@@ -105,6 +110,9 @@ impl SsoSessionManager {
     }
 
     fn set_probe_cache(&self, valid: bool) {
+        self.probe_state
+            .probe_in_flight
+            .store(false, Ordering::SeqCst);
         if let Ok(mut last) = self.probe_state.last_probe_at.lock() {
             *last = Some(Instant::now());
         }
@@ -113,13 +121,25 @@ impl SsoSessionManager {
         }
     }
 
-    fn should_probe(&self) -> bool {
-        let Ok(guard) = self.probe_state.last_probe_at.lock() else {
-            return true;
-        };
-        guard
-            .map(|last| last.elapsed() >= SESSION_PROBE_INTERVAL)
-            .unwrap_or(true)
+    fn release_probe_slot(&self) {
+        self.probe_state
+            .probe_in_flight
+            .store(false, Ordering::SeqCst);
+    }
+
+    /// Claim the single in-flight probe slot (and respect post-probe cooldown).
+    fn try_begin_probe(&self) -> bool {
+        if let Ok(guard) = self.probe_state.last_probe_at.lock() {
+            if let Some(last) = *guard {
+                if last.elapsed() < SESSION_PROBE_INTERVAL {
+                    return false;
+                }
+            }
+        }
+        !self
+            .probe_state
+            .probe_in_flight
+            .swap(true, Ordering::SeqCst)
     }
 
     fn try_mark_auto_complete(&self) -> bool {
@@ -651,18 +671,12 @@ async fn confirm_wiki_session(
     if let Some(true) = session_manager.cached_probe_valid() {
         return Ok(true);
     }
-    if session_manager.cached_probe_valid() == Some(false) && !session_manager.should_probe() {
-        return Ok(false);
-    }
 
     if !wiki_session_ready_for_probe(window, confluence_host, current_url)? {
         return Ok(false);
     }
 
-    if !session_manager.should_probe() {
-        return Ok(session_manager.cached_probe_valid().unwrap_or(false));
-    }
-
+    // Caller already reserved via try_begin_probe; run the single in-flight check.
     let valid = probe_wiki_session_via_api(window, confluence_host, stored_base, current_url).await?;
     session_manager.set_probe_cache(valid);
     Ok(valid)
@@ -708,6 +722,8 @@ fn spawn_wiki_session_probe(
         )
         .await
         .unwrap_or(false);
+        // Early exits skip set_probe_cache; always free the slot claimed by try_begin_probe.
+        session_manager.release_probe_slot();
 
         if confirmed && is_on_wiki_success_page(current_url_ref, &confluence_host) {
             trigger_auto_complete_sso(app, session_manager);
@@ -1046,7 +1062,7 @@ fn background_monitor_sso_session(
 
                 if wiki_session_ready_for_probe(&window, &confluence_host, Some(current_url_ref))
                     .unwrap_or(false)
-                    && session_manager.should_probe()
+                    && session_manager.try_begin_probe()
                 {
                     spawn_wiki_session_probe(
                         app.clone(),
@@ -1228,7 +1244,7 @@ pub fn get_sso_session_status(
             current_url_ref,
         )
         .unwrap_or(false)
-        && session_manager.should_probe()
+        && session_manager.try_begin_probe()
     {
         spawn_wiki_session_probe(
             app.clone(),
@@ -1749,6 +1765,17 @@ mod tests {
         record_navigation(&url, HOST, &state);
 
         assert!(!state.oauth_in_progress.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn try_begin_probe_blocks_overlapping_probes() {
+        let manager = SsoSessionManager::default();
+        assert!(manager.try_begin_probe());
+        assert!(!manager.try_begin_probe());
+        manager.release_probe_slot();
+        assert!(manager.try_begin_probe());
+        manager.set_probe_cache(false);
+        assert!(!manager.try_begin_probe());
     }
 
     #[test]

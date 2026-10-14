@@ -45,6 +45,9 @@ export function translateProgressEvent(
   if (event.messageKey === 'export.complete') {
     return t('export:complete', event.messageParams ?? {})
   }
+  if (event.messageKey === 'export.checkpoint') {
+    return t('export:checkpoint', event.messageParams ?? {})
+  }
   return event.message ?? ''
 }
 

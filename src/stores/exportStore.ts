@@ -47,10 +47,13 @@ interface ExportState {
   clearLogs: () => void
   options: ExportPanelOptions
   error: string | null
+  resumeOptions: ExportOptions | null
+  isPaused: boolean
 
   setOptions: (options: Partial<ExportPanelOptions>) => void
   startExport: (pageIds: string[]) => Promise<void>
   stopExport: () => Promise<void>
+  resumeExport: () => Promise<void>
   reset: () => void
 }
 
@@ -83,6 +86,8 @@ export const useExportStore = create<ExportState>()(
         format: 'markdown',
       },
       error: null,
+      resumeOptions: null,
+      isPaused: false,
 
       setOptions: (options) =>
         set((state) => ({
@@ -92,13 +97,16 @@ export const useExportStore = create<ExportState>()(
       startExport: async (pageIds) => {
         if (get().isExporting) return
         const { options } = get()
+        const exportOptions = { ...options, pageIds: [...pageIds] }
         set({
           isExporting: true,
           isCancelling: false,
           cancelRequested: false,
+          resumeOptions: exportOptions,
+          isPaused: false,
           progress: 0,
           error: null,
-          stats: defaultStats,
+          stats: { ...defaultStats, total: pageIds.length },
         })
         const unlisteners: (() => void)[] = []
         let lastActivity = Date.now()
@@ -111,6 +119,7 @@ export const useExportStore = create<ExportState>()(
           message: i18n.t('export:logs.starting', {
             count: pageIds.length,
             format: options.format,
+            pageIds: pageIds.join(', '),
           }),
         })
         try {
@@ -159,6 +168,7 @@ export const useExportStore = create<ExportState>()(
               })
             }
           }, 5_000)
+          if (get().cancelRequested) throw new Error('EXPORT_CANCELLED')
           await api.exportPages({
             pageIds,
             outputDir: options.outputDir,
@@ -175,6 +185,9 @@ export const useExportStore = create<ExportState>()(
             })
           set({
             isExporting: false,
+            isPaused: cancelled,
+            resumeOptions:
+              cancelled || get().stats.failed > 0 ? exportOptions : null,
             progress: cancelled ? get().progress : 100,
           })
         } catch (err) {
@@ -189,6 +202,7 @@ export const useExportStore = create<ExportState>()(
           set({
             error: cancelled ? null : message,
             isExporting: false,
+            isPaused: cancelled,
           })
         } finally {
           if (watchdog) clearInterval(watchdog)
@@ -223,6 +237,17 @@ export const useExportStore = create<ExportState>()(
         }
       },
 
+      resumeExport: async () => {
+        const pending = get().resumeOptions
+        if (!pending || get().isExporting) return
+        get().setOptions({
+          outputDir: pending.outputDir,
+          format: pending.format,
+          includeAttachments: pending.includeAttachments,
+        })
+        await get().startExport(pending.pageIds)
+      },
+
       reset: () =>
         set({
           isExporting: false,
@@ -232,11 +257,13 @@ export const useExportStore = create<ExportState>()(
           stats: defaultStats,
           logs: [],
           error: null,
+          resumeOptions: null,
+          isPaused: false,
         }),
     }),
     {
       name: 'export-log-preferences',
-      partialize: (state) => ({ logLevel: state.logLevel }),
+      partialize: (state) => ({ logLevel: state.logLevel, resumeOptions: state.resumeOptions }),
     },
   ),
 )

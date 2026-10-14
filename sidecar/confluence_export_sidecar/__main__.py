@@ -9,6 +9,7 @@ from confluence_export_sidecar.confluence_client import AuthenticationRequired, 
 from requests import HTTPError
 from confluence_export_sidecar.exporter import export_pages as run_export_pages
 from confluence_export_sidecar.exporter import export_migration_package
+from confluence_export_sidecar.checkpoint import ExportCheckpoint
 from confluence_export_sidecar.log import get_logger, set_log_secrets, redact_log_message
 from confluence_export_sidecar.protocol import ProtocolError, parse_request, success_response
 
@@ -121,8 +122,14 @@ def _dispatch(req: dict) -> dict:
                 [str(page_id) for page_id in page_ids],
                 include_attachments,
                 export_format,
+                payload.get("output_dir"),
             )
-            return success_response(request_id, {"pages": pages})
+            result = {"pages": pages}
+            if payload.get("output_dir"):
+                checkpoint = ExportCheckpoint(payload["output_dir"], auth, [str(id) for id in page_ids],
+                                              export_format, include_attachments)
+                result["checkpoint_path"] = str(checkpoint.root)
+            return success_response(request_id, result)
         except Exception as exc:  # noqa: BLE001
             log.exception("page export failed")
             return _exception_response(request_id, exc)
