@@ -211,7 +211,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "confluence-markdown-exporter", path = "vendor/confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl" },
+    { name = "confluence-markdown-exporter", path = "vendor/confluence_markdown_exporter-5.5.0+heytea.2-py3-none-any.whl" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
@@ -219,8 +219,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "confluence-markdown-exporter"
-version = "5.5.0+heytea.1"
-source = { path = "vendor/confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl" }
+version = "5.5.0+heytea.2"
+source = { path = "vendor/confluence_markdown_exporter-5.5.0+heytea.2-py3-none-any.whl" }
 dependencies = [
     { name = "atlassian-python-api" },
     { name = "jmespath" },
@@ -235,7 +235,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { filename = "confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl", hash = "sha256:651a52b240a49b48111204cc4babb6c9ac9e7d9086f5328cdeb566540435c4dd" },
+    { filename = "confluence_markdown_exporter-5.5.0+heytea.2-py3-none-any.whl", hash = "sha256:4abf36a9db5074d8854be0c47cdc35272552f9fa987a55479b0fe474746f9739" },
 ]
 
 [package.metadata]
