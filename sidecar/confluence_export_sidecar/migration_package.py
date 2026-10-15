@@ -110,7 +110,7 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
         def rewrite(match: re.Match[str]) -> str:
             if match.group("code") or any(start <= match.start() < end for start, end in code_ranges):
                 return match.group(0)
-            href = match.group("href")
+            href = match.group("href") or match.group("html_href")
             parsed = urlsplit(unquote(href.strip("<>")))
             target = links.get(parsed.path) if not parsed.scheme and not parsed.netloc else None
             if target:
@@ -121,10 +121,11 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
                 href = page["base_url"] + "/pages/viewpage.action?pageId=" + parsed.path[:-3]
                 if parsed.fragment:
                     href += "#" + quote(parsed.fragment)
-            return match.group("prefix") + href
+            return (match.group("prefix") or match.group("html_prefix")) + href
 
         markdown = re.sub(
             r"(?P<code>(?P<ticks>`+)[^`]*?(?P=ticks))"
+            r"|(?P<html_prefix><(?:a|img)\b[^>]*?\s(?:href|src)=[\"'])(?P<html_href>[^\"']+)"
             r"|(?P<prefix>\]\(|^ {0,3}\[[^\]\n]+\]:[ \t]*)(?P<href><?[^\s)>]+>?)",
             rewrite, page["markdown"], flags=re.MULTILINE,
         )

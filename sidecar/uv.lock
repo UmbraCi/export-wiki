@@ -211,7 +211,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "confluence-markdown-exporter", specifier = ">=5.4.0" },
+    { name = "confluence-markdown-exporter", path = "vendor/confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
@@ -219,8 +219,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "confluence-markdown-exporter"
-version = "5.4.0"
-source = { registry = "https://pypi.org/simple" }
+version = "5.5.0+heytea.1"
+source = { path = "vendor/confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl" }
 dependencies = [
     { name = "atlassian-python-api" },
     { name = "jmespath" },
@@ -234,9 +234,23 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/21/dd/014f9b0f70d68391f4443a91ec1998c5a6ce75715a0dc73f9717431f7825/confluence_markdown_exporter-5.4.0.tar.gz", hash = "sha256:98a9b5d58a7ba99ac271c1765165eba629c559a8a9e3d4b5188fbc673119b684", size = 386026, upload-time = "2026-08-17T19:16:45.25Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/5c/004b88cb0a4d753425d97c5a8ec6d84eeb563006a1114de33673d74c2977/confluence_markdown_exporter-5.4.0-py3-none-any.whl", hash = "sha256:298b05035a8e9741d419462c4562377ddeb1a65a516a1751f2522fd4c84a6154", size = 86965, upload-time = "2026-08-17T19:16:43.999Z" },
+    { filename = "confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl", hash = "sha256:651a52b240a49b48111204cc4babb6c9ac9e7d9086f5328cdeb566540435c4dd" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "atlassian-python-api", specifier = ">=4,<5" },
+    { name = "jmespath" },
+    { name = "lxml", specifier = ">=6.0.2" },
+    { name = "markdownify" },
+    { name = "pydantic-settings" },
+    { name = "python-dateutil" },
+    { name = "pyyaml" },
+    { name = "questionary" },
+    { name = "rich" },
+    { name = "tabulate" },
+    { name = "typer" },
 ]
 
 [[package]]

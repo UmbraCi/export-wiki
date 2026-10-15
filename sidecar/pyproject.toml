@@ -7,7 +7,7 @@ name = "confluence-export-sidecar"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-  "confluence-markdown-exporter>=5.4.0",
+  "confluence-markdown-exporter==5.5.0+heytea.1",
 ]
 
 [project.optional-dependencies]
@@ -22,3 +22,7 @@ where = ["."]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.uv.sources]
+# Built from exporter commit c9c1421; includes merged-cell HTML and page-discovery fixes.
+confluence-markdown-exporter = { path = "vendor/confluence_markdown_exporter-5.5.0+heytea.1-py3-none-any.whl" }
