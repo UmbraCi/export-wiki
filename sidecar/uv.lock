@@ -211,7 +211,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "confluence-markdown-exporter", specifier = ">=5.4.0" },
+    { name = "confluence-markdown-exporter", specifier = ">=5.5.0" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
@@ -219,7 +219,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "confluence-markdown-exporter"
-version = "5.4.0"
+version = "5.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "atlassian-python-api" },
@@ -234,9 +234,9 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/21/dd/014f9b0f70d68391f4443a91ec1998c5a6ce75715a0dc73f9717431f7825/confluence_markdown_exporter-5.4.0.tar.gz", hash = "sha256:98a9b5d58a7ba99ac271c1765165eba629c559a8a9e3d4b5188fbc673119b684", size = 386026, upload-time = "2026-08-17T19:16:45.25Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/06/57a7aa4ad69175eecce31577770ac12f661fc577102176bc1366356df3ed/confluence_markdown_exporter-5.5.0.tar.gz", hash = "sha256:c94c7026b0886c652dd294a16cb8d7535f2a7896b4f7d7c3841ff558568156db", size = 414998, upload-time = "2026-09-28T15:34:54.273Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/5c/004b88cb0a4d753425d97c5a8ec6d84eeb563006a1114de33673d74c2977/confluence_markdown_exporter-5.4.0-py3-none-any.whl", hash = "sha256:298b05035a8e9741d419462c4562377ddeb1a65a516a1751f2522fd4c84a6154", size = 86965, upload-time = "2026-08-17T19:16:43.999Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/42/f2b97de80ced3061005d73de140db91d2b5ea1aedd16a477dec7c0fe6540/confluence_markdown_exporter-5.5.0-py3-none-any.whl", hash = "sha256:7035feb20e59874d3a78422bf47e1a3802eeb86b9d0d0f2b8a1d014c503fdaba", size = 96534, upload-time = "2026-09-28T15:34:53.302Z" },
 ]
 
 [[package]]

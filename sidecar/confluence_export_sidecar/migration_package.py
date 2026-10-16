@@ -10,7 +10,7 @@ import zipfile
 from itertools import accumulate
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit
 
 import yaml
 from markdown_it import MarkdownIt
@@ -36,6 +36,56 @@ def _with_title(markdown: str, title: str) -> str:
                 markdown = markdown[end + 5:]
     metadata["title"] = title
     return "---\n" + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False) + "---\n\n" + markdown
+
+
+def rewrite_links(markdown: str, document_path: str, links: dict[str, str], base_url: str) -> str:
+    """Resolve exported Markdown/HTML links, preserving inline and fenced code."""
+    parent = posixpath.dirname(document_path)
+    offsets = [0, *accumulate(len(line) for line in markdown.splitlines(keepends=True))]
+    code_ranges = [(offsets[token.map[0]], offsets[token.map[1]])
+                   for token in MarkdownIt("commonmark").parse(markdown)
+                   if token.type in {"fence", "code_block"} and token.map]
+
+    def rewrite(match: re.Match[str]) -> str:
+        if match.group("code"):
+            return match.group(0)
+        href = match.group("href") or match.group("html_href")
+        clean_href = re.sub(r"^(?:%20|\s)+", "", href.strip("<>"))
+        parsed = urlsplit(clean_href)
+        path = unquote(parsed.path)
+        local = not parsed.scheme and not parsed.netloc
+        target = links.get(path) if local else None
+        if local and (path.endswith("/pages/viewpage.action") or path == "viewpage.action"):
+            page_id = parse_qs(parsed.query).get("pageId", [""])[0]
+            target = links.get(f"{page_id}.md")
+            if target is None:
+                href = urljoin(base_url + "/pages/", clean_href)
+        if target:
+            href = quote(posixpath.relpath(target, parent or "."), safe="/._-~")
+            if parsed.fragment:
+                href += "#" + quote(unquote(parsed.fragment))
+        elif local and re.fullmatch(r"[0-9]+\.md", path):
+            href = base_url + "/pages/viewpage.action?pageId=" + path[:-3]
+            if parsed.fragment:
+                href += "#" + quote(unquote(parsed.fragment))
+        elif local and path.startswith("/"):
+            href = urljoin(base_url, clean_href)
+        return (match.group("prefix") or match.group("html_prefix")) + href
+
+    pattern = re.compile(
+        r"(?P<code>(?<!`)(?P<ticks>`+)(?!`)(?:(?!\n[ \t]*\n)[^`])*?(?P=ticks)(?!`))"
+        r"|(?P<html_prefix><(?:a|img)\b[^>]*?\s(?:href|src)=[\"'])(?P<html_href>[^\"']+)"
+        r"|(?P<prefix>\]\(|^ {0,3}\[[^\]\n]+\]:[ \t]*)(?P<href><?[^\s)>]+>?)",
+        flags=re.MULTILINE,
+    )
+    # Never let inline backticks pair across a fenced or indented code block.
+    parts = []
+    cursor = 0
+    for start, end in code_ranges:
+        parts.extend((pattern.sub(rewrite, markdown[cursor:start]), markdown[start:end]))
+        cursor = end
+    parts.append(pattern.sub(rewrite, markdown[cursor:]))
+    return "".join(parts)
 
 
 def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, Any]]) -> Path:
@@ -100,34 +150,8 @@ def publish_markdown_package(*, output_dir: str | Path, pages: list[dict[str, An
     for page in pages:
         page_id = str(page["id"])
         document_path = paths[page_id]
-        parent = posixpath.dirname(document_path)
 
-        offsets = [0, *accumulate(len(line) for line in page["markdown"].splitlines(keepends=True))]
-        code_ranges = [(offsets[token.map[0]], offsets[token.map[1]])
-                       for token in MarkdownIt("commonmark").parse(page["markdown"])
-                       if token.type in {"fence", "code_block"} and token.map]
-
-        def rewrite(match: re.Match[str]) -> str:
-            if match.group("code") or any(start <= match.start() < end for start, end in code_ranges):
-                return match.group(0)
-            href = match.group("href")
-            parsed = urlsplit(unquote(href.strip("<>")))
-            target = links.get(parsed.path) if not parsed.scheme and not parsed.netloc else None
-            if target:
-                href = quote(posixpath.relpath(target, parent or "."), safe="/._-~")
-                if parsed.fragment:
-                    href += "#" + quote(parsed.fragment)
-            elif not parsed.scheme and not parsed.netloc and re.fullmatch(r"[0-9]+\.md", parsed.path):
-                href = page["base_url"] + "/pages/viewpage.action?pageId=" + parsed.path[:-3]
-                if parsed.fragment:
-                    href += "#" + quote(parsed.fragment)
-            return match.group("prefix") + href
-
-        markdown = re.sub(
-            r"(?P<code>(?P<ticks>`+)[^`]*?(?P=ticks))"
-            r"|(?P<prefix>\]\(|^ {0,3}\[[^\]\n]+\]:[ \t]*)(?P<href><?[^\s)>]+>?)",
-            rewrite, page["markdown"], flags=re.MULTILINE,
-        )
+        markdown = rewrite_links(page["markdown"], document_path, links, page["base_url"])
         files[document_path] = _with_title(markdown, titles[page_id]).encode("utf-8")
 
     destination = Path(output_dir).resolve()

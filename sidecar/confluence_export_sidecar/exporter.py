@@ -6,8 +6,10 @@ import base64
 import re
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from pathlib import Path
+from time import sleep
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -24,6 +26,7 @@ from confluence_markdown_exporter.utils.app_data_store import (
     ExportConfig,
 )
 from pydantic import SecretStr
+from requests.exceptions import ChunkedEncodingError, ConnectionError, Timeout
 
 from confluence_export_sidecar.attachment_download import download_attachment
 from confluence_export_sidecar.checkpoint import ExportCheckpoint
@@ -41,6 +44,26 @@ def _log_response(response: Any, *_args: Any, **_kwargs: Any) -> Any:
         response.status_code, response.elapsed.total_seconds() * 1000,
     )
     return response
+
+
+def _retry_interrupted_gets(client: Any) -> None:
+    request = client.session.request
+
+    def request_with_retry(*args: Any, **kwargs: Any) -> Any:
+        method = args[0] if args else kwargs.get("method", "")
+        url = args[1] if len(args) > 1 else kwargs.get("url", "")
+        if (str(method).upper() != "GET"
+                or not urlsplit(str(url)).path.endswith("/rest/api/content/search")):
+            return request(*args, **kwargs)
+        for attempt in range(3):
+            try:
+                return request(*args, **kwargs)
+            except (ChunkedEncodingError, ConnectionError, Timeout):
+                if attempt == 2:
+                    raise
+                sleep(attempt + 1)
+
+    client.session.request = request_with_retry
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _WINDOWS_RESERVED = {
@@ -106,6 +129,7 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool, *, migration
         attachments_export="referenced" if include_attachments else "disabled",
         skip_unchanged=False,
         cleanup_stale=False,
+        enable_jira_enrichment=False,
     )
 
     confluence_auth: dict[str, ApiDetails] = {}
@@ -136,6 +160,7 @@ def _configure_cme(auth: dict[str, Any], include_attachments: bool, *, migration
         base_url,
         confluence_auth[base_url],
     )
+    _retry_interrupted_gets(client)
     client.session.hooks.setdefault("response", []).append(_log_response)
     if not hasattr(_thread_local, "clients"):
         _thread_local.clients = {}
@@ -276,37 +301,25 @@ def export_migration_package(
 def _export_migration_package(page_ids, auth, output_dir, include_attachments, checkpoint):
     base_url = _configure_cme(auth, include_attachments, migration=True)
     pages = []
-    for page_id in page_ids:
+    def fetch(page_id):
         saved = checkpoint.load_page(page_id)
         if saved is not None:
             log.info("resuming saved page_id=%s", page_id)
-            pages.append(saved)
-            _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
-            continue
-        log.info("fetching migration page_id=%s", page_id)
-        page = Page.from_id(int(page_id), base_url)
-        if page.title == "Page not accessible":
-            raise ValueError(f"Page {page_id} is not accessible")
-        attachments = []
-        if include_attachments:
-            for attachment in page._attachments_for_export():  # noqa: SLF001
-                content = _download_attachment_content(attachment, base_url, checkpoint.downloads)
-                if content is None:
-                    raise ValueError(f"Attachment {attachment.id} could not be downloaded")
-                attachments.append({"path": attachment.export_path.as_posix(), "title": attachment.title, "content": content})
-        log.info("converting migration page_id=%s", page_id)
-        exported = {
-            "id": str(page.id),
-            "title": page.title,
-            "source_path": [page.space.name, *(ancestor.title for ancestor in page.ancestors), page.title],
-            "source_ids": [f"space:{page.space.key}", *(str(ancestor.id) for ancestor in page.ancestors), str(page.id)],
-            "base_url": base_url,
-            "markdown": page.markdown,
-            "attachments": attachments,
-        }
+            return saved
+        # Separate partial files when pages reference the same attachment concurrently.
+        downloads = checkpoint.downloads / page_id
+        downloads.mkdir(exist_ok=True, mode=0o700)
+        exported = _fetch_migration_page(page_id, base_url, include_attachments, downloads)
         checkpoint.save_page(page_id, exported)
-        pages.append(exported)
-        _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
+        return exported
+
+    with ThreadPoolExecutor(
+        max_workers=4,
+        initializer=lambda: _configure_cme(auth, include_attachments, migration=True),
+    ) as executor:
+        for page_id, exported in zip(page_ids, executor.map(fetch, page_ids)):
+            pages.append(exported)
+            _log_checkpoint_progress(page_id, len(pages), len(page_ids), pages)
     log.info("writing migration package (%d pages)", len(pages))
     package_path = publish_markdown_package(output_dir=output_dir, pages=pages)
     shutil.rmtree(checkpoint.root)
@@ -314,6 +327,30 @@ def _export_migration_package(page_ids, auth, output_dir, include_attachments, c
         "package_path": str(package_path),
         "attachments": len({attachment["path"]
                             for page in pages for attachment in page["attachments"]}),
+    }
+
+
+def _fetch_migration_page(page_id, base_url, include_attachments, download_dir):
+    log.info("fetching migration page_id=%s", page_id)
+    page = Page.from_id(int(page_id), base_url)
+    if page.title == "Page not accessible":
+        raise ValueError(f"Page {page_id} is not accessible")
+    attachments = []
+    if include_attachments:
+        for attachment in page._attachments_for_export():  # noqa: SLF001
+            content = _download_attachment_content(attachment, base_url, download_dir)
+            if content is None:
+                raise ValueError(f"Attachment {attachment.id} could not be downloaded")
+            attachments.append({"path": attachment.export_path.as_posix(), "title": attachment.title, "content": content})
+    log.info("converting migration page_id=%s", page_id)
+    return {
+        "id": str(page.id),
+        "title": page.title,
+        "source_path": [page.space.name, *(ancestor.title for ancestor in page.ancestors), page.title],
+        "source_ids": [f"space:{page.space.key}", *(str(ancestor.id) for ancestor in page.ancestors), str(page.id)],
+        "base_url": base_url,
+        "markdown": page.markdown,
+        "attachments": attachments,
     }
 
 

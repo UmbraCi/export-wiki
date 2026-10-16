@@ -143,6 +143,7 @@ def test_real_confluence_converter_produces_resolvable_links(tmp_path):
                               body="<p>正文</p>", body_export="")
     with patch("confluence_export_sidecar.exporter.ApiClientFactory.create_confluence"), \
          patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=lambda id, url: {1: guide, 2: faq}[id]), \
+             patch("confluence_markdown_exporter.confluence._link_target", side_effect=lambda id, url: {1: guide, 2: faq}[id]), \
          patch("confluence_export_sidecar.exporter._download_attachment_content", return_value=b"image"):
         result = export_migration_package(page_ids=["1", "2"], auth={"base_url": "https://wiki.test", "method": "sso", "cookie": "test"}, output_dir=str(tmp_path))
     with zipfile.ZipFile(result["package_path"]) as archive:
@@ -238,3 +239,98 @@ def test_exporter_uses_stable_converter_paths_and_preserves_ancestor_identity(tm
     with zipfile.ZipFile(result["package_path"]) as archive:
         assert "产品/首页/指南.md" in archive.namelist()
         assert "![截图](../attachments/99.png)" in archive.read("产品/首页/指南.md").decode()
+
+
+def test_migration_export_fetches_pages_concurrently_and_keeps_selection_order(tmp_path):
+    from threading import Barrier
+
+    ready = Barrier(4, timeout=2)
+    directories = []
+    attachment = SimpleNamespace(id="99", title="shared.png", export_path=Path("attachments/99.png"))
+    def download(attachment, base_url, directory):
+        assert directory.is_dir()
+        directories.append(directory)
+        return b"shared image"
+
+    def fetch(page_id, base_url):
+        ready.wait()
+        return SimpleNamespace(id=page_id, title=f"Page {page_id}",
+                               space=SimpleNamespace(name="Space", key="P"),
+                               ancestors=[], markdown=str(page_id),
+                               _attachments_for_export=lambda: [attachment])
+
+    with patch("confluence_export_sidecar.exporter._configure_cme", return_value="https://wiki.test"), \
+         patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=fetch), \
+         patch("confluence_export_sidecar.exporter._download_attachment_content", side_effect=download):
+        result = export_migration_package(page_ids=["4", "3", "2", "1"], auth={}, output_dir=str(tmp_path))
+    assert Path(result["package_path"]).name == "confluence-migration-4-4.zip"
+    with zipfile.ZipFile(result["package_path"]) as archive:
+        assert len(archive.namelist()) == 5
+    assert len(set(directories)) == 4
+
+
+def test_slow_first_page_does_not_block_idle_workers_from_fetching_next_page(tmp_path):
+    from threading import Event
+
+    fifth_started = Event()
+    def fetch(page_id, base_url):
+        if page_id == 1:
+            assert fifth_started.wait(2), "idle workers must continue beyond the first batch"
+        if page_id == 5:
+            fifth_started.set()
+        return SimpleNamespace(id=page_id, title=f"Page {page_id}",
+                               space=SimpleNamespace(name="Space", key="P"),
+                               ancestors=[], markdown=str(page_id),
+                               _attachments_for_export=lambda: [])
+    with patch("confluence_export_sidecar.exporter._configure_cme", return_value="https://wiki.test"), \
+         patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=fetch):
+        export_migration_package(page_ids=["1", "2", "3", "4", "5"], auth={}, output_dir=str(tmp_path))
+
+
+def test_html_assets_and_wiki_relative_links_are_rewritten_without_touching_code(tmp_path):
+    markdown = '''<img src="attachments/99.png" width="80">
+<a href="viewpage.action?pageId=2">child</a>
+[profile](%20%20/display/~someone)
+[external attachment](/download/attachments/77/manual.pdf?version=2)
+`<img src="attachments/99.png">`
+
+```html
+<img src="attachments/99.png">
+```
+'''
+    package = publish_markdown_package(output_dir=tmp_path, pages=[
+        page(1, ["Space", "Guide"], markdown, attachments=[{"path": "attachments/99.png", "title": "image.png", "content": b"image"}]),
+        page(2, ["Space", "Child"]),
+    ])
+    with zipfile.ZipFile(package) as archive:
+        content = archive.read("Space/Guide.md").decode()
+    assert '<img src="attachments/image.png" width="80">' in content
+    assert '<a href="Child.md">child</a>' in content
+    assert '[profile](https://wiki.example.test/display/~someone)' in content
+    assert '(https://wiki.example.test/download/attachments/77/manual.pdf?version=2)' in content
+    assert '`<img src="attachments/99.png">`' in content
+    assert '```html\n<img src="attachments/99.png">\n```' in content
+
+
+def test_template_literals_in_fences_do_not_hide_images_between_code_blocks(tmp_path):
+    markdown = '```js\nconst x = `hello`;\n```\n\n![](attachments/99.png)\n\n```js\nconst y = `world`;\n```\n'
+    package = publish_markdown_package(output_dir=tmp_path, pages=[
+        page(1, ["Space", "Guide"], markdown, attachments=[{"path": "attachments/99.png", "title": "image.png", "content": b"image"}]),
+    ])
+    with zipfile.ZipFile(package) as archive:
+        content = archive.read("Space/Guide.md").decode()
+    assert '![](attachments/image.png)' in content
+    assert '```js\nconst x = `hello`;\n```' in content
+    assert '```js\nconst y = `world`;\n```' in content
+
+
+def test_html_data_attributes_and_unclosed_backticks_do_not_hide_real_assets(tmp_path):
+    markdown = '<img data-image-src="attachments/99.png" src="attachments/99.png">\n\n<font>```![](attachments/99.png)</font>\n\n`ordinary code`\n'
+    package = publish_markdown_package(output_dir=tmp_path, pages=[
+        page(1, ["Space", "Guide"], markdown, attachments=[{"path": "attachments/99.png", "title": "image.png", "content": b"image"}]),
+    ])
+    with zipfile.ZipFile(package) as archive:
+        content = archive.read("Space/Guide.md").decode()
+    assert 'src="attachments/image.png">' in content
+    assert '<font>```![](attachments/image.png)</font>' in content
+    assert '`ordinary code`' in content

@@ -52,6 +52,28 @@ def test_sso_export_uses_official_session_cookie_config():
     assert auth.session_cookies.get_secret_value() == "JSESSIONID=abc"
 
 
+def test_cme_get_retries_interrupted_chunked_response():
+    import requests
+
+    session = requests.Session()
+    complete = Mock(status_code=200)
+    request = Mock(side_effect=[ChunkedEncodingError("truncated"), complete])
+    session.request = request
+    client = SimpleNamespace(session=session)
+    with patch("confluence_export_sidecar.exporter.ApiClientFactory.create_confluence", return_value=client), \
+         patch("confluence_export_sidecar.exporter.sleep") as sleep:
+        _configure_cme(
+            {"base_url": "https://wiki.example.com", "method": "sso", "cookie": "JSESSIONID=abc"},
+            include_attachments=False,
+        )
+        assert client.session.request(
+            method="GET", url="https://wiki.example.com/rest/api/content/search"
+        ) is complete
+
+    assert request.call_count == 2
+    sleep.assert_called_once_with(1)
+
+
 @pytest.mark.parametrize("error", [ChunkedEncodingError, ConnectionError, Timeout])
 def test_attachment_network_failures_have_bounded_retries(error):
     attachment = SimpleNamespace(id="99", filename="99.png", download_link="/download/99.png")
@@ -91,3 +113,17 @@ def test_attachment_body_interruption_retries_and_closes_responses():
         assert _download_attachment_content(attachment, client.url) == b"image"
     interrupted.close.assert_called_once()
     complete.close.assert_called_once()
+
+
+def test_wiki_export_preserves_jira_link_without_requesting_jira_credentials():
+    from bs4 import BeautifulSoup
+    from confluence_markdown_exporter.confluence import Page
+
+    source = SimpleNamespace(base_url="https://wiki.test")
+    element = BeautifulSoup('<span data-jira-key="FE-123"><a class="jira-issue-key" href="https://jira.test/browse/FE-123">FE-123</a></span>', "html.parser").span
+    with patch("confluence_export_sidecar.exporter.ApiClientFactory.create_confluence"), \
+         patch("confluence_markdown_exporter.confluence.JiraIssue._fetch_cached", side_effect=AssertionError("Wiki export must not request Jira")):
+        _configure_cme({"base_url": "https://wiki.test", "method": "cookie", "cookie": "test"}, False)
+        result = Page.Converter(source).convert_jira_issue(element, "FE-123", [])
+    assert "FE-123" in result
+    assert "https://jira.test/browse/FE-123" in result
