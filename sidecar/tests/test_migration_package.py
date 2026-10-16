@@ -1,7 +1,7 @@
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import unquote
 
 import pytest
@@ -128,7 +128,8 @@ def test_nested_list_images_are_rewritten_without_changing_indented_code(tmp_pat
     assert "    [example](2.md)" in result
 
 
-def test_real_confluence_converter_produces_resolvable_links(tmp_path):
+@pytest.mark.parametrize("merged", [False, True])
+def test_real_confluence_converter_produces_resolvable_links(tmp_path, merged):
     from confluence_markdown_exporter.confluence import Page, Space, Attachment
 
     space = Space.model_construct(name="产品文档", key="P", homepage=None)
@@ -141,14 +142,29 @@ def test_real_confluence_converter_produces_resolvable_links(tmp_path):
     faq = Page.model_construct(id=2, title="常见问题", space=space, ancestors=[guide], version=None,
                               base_url="https://wiki.test/wiki", labels=[], attachments=[], editor2="",
                               body="<p>正文</p>", body_export="")
+    if merged:
+        guide.body = '<table><tr><td colspan="2">' + guide.body + '</td></tr></table>'
+    client = MagicMock()
+    client.get_page_by_id.return_value = {"id": 2, "title": "常见问题",
+                                          "_expandable": {"space": "/rest/api/space/P"}}
+    client.get_space.return_value = {"key": "P", "name": "产品文档", "homepage": {"id": None}}
     with patch("confluence_export_sidecar.exporter.ApiClientFactory.create_confluence"), \
+         patch("confluence_markdown_exporter.confluence.get_thread_confluence", return_value=client), \
          patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=lambda id, url: {1: guide, 2: faq}[id]), \
              patch("confluence_markdown_exporter.confluence._link_target", side_effect=lambda id, url: {1: guide, 2: faq}[id]), \
          patch("confluence_export_sidecar.exporter._download_attachment_content", return_value=b"image"):
         result = export_migration_package(page_ids=["1", "2"], auth={"base_url": "https://wiki.test", "method": "sso", "cookie": "test"}, output_dir=str(tmp_path))
     with zipfile.ZipFile(result["package_path"]) as archive:
         markdown = unquote(archive.read("产品文档/使用指南.md").decode())
-        assert "[常见问题](使用指南/常见问题.md)" in markdown
+        if merged:
+            from bs4 import BeautifulSoup
+            table = BeautifulSoup(markdown, "html.parser").table
+            assert table.td["colspan"] == "2"
+            assert table.a["href"] == "使用指南/常见问题.md"
+            assert table.img["src"] == "attachments/screenshot.png"
+            assert markdown.count("常见问题</a>") == 1
+        else:
+            assert "[常见问题](使用指南/常见问题.md)" in markdown
         assert "attachments/screenshot.png" in markdown
         assert "产品文档/使用指南/常见问题.md" in archive.namelist()
 
@@ -178,10 +194,13 @@ def test_failed_export_resumes_completed_pages_and_keeps_original_package(tmp_pa
                             ancestors=[], markdown="first", _attachments_for_export=lambda: [])
     second = SimpleNamespace(id=2, title="Second", space=first.space, ancestors=[],
                              markdown="second", _attachments_for_export=lambda: [])
+    def fail_second_page():
+        raise ConnectionError("offline")
+
     target = tmp_path / "confluence-migration-1-2.zip"
     target.write_bytes(b"existing")
     with patch("confluence_export_sidecar.exporter._configure_cme", return_value="https://wiki.test"), \
-         patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=[first, ConnectionError("offline")]):
+         patch("confluence_export_sidecar.exporter.Page.from_id", side_effect=lambda page_id, _url: first if page_id == 1 else fail_second_page()):
         with pytest.raises(ConnectionError):
             export_migration_package(page_ids=["1", "2"], auth={}, output_dir=str(tmp_path))
     assert target.read_bytes() == b"existing"
