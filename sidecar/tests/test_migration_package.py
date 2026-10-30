@@ -353,3 +353,36 @@ def test_html_data_attributes_and_unclosed_backticks_do_not_hide_real_assets(tmp
     assert 'src="attachments/image.png">' in content
     assert '<font>```![](attachments/image.png)</font>' in content
     assert '`ordinary code`' in content
+
+
+def test_packaged_converter_preserves_highlighted_numbered_cells_and_bold(tmp_path):
+    from bs4 import BeautifulSoup
+    from markdown_it import MarkdownIt
+    from confluence_markdown_exporter.confluence import Page
+    from confluence_markdown_exporter.utils.app_data_store import ExportConfig
+
+    source = (
+        '<table><tr><th>现状</th><th>计划</th></tr><tr>'
+        '<td data-highlight-colour="#ffebe6"><ol><li>示例A</li><li>示例B</li></ol></td>'
+        '<td data-highlight-colour="#e3fcef"><strong>阶段：</strong>继续</td>'
+        '</tr></table>'
+    )
+    with patch("confluence_markdown_exporter.confluence.settings") as settings:
+        settings.export = ExportConfig(convert_text_highlights=True)
+        markdown = Page.Converter(SimpleNamespace(html="")).convert(source)
+    package = publish_markdown_package(
+        output_dir=tmp_path,
+        pages=[page(1, ["Space", "Example"], markdown, attachments=[])],
+    )
+    with zipfile.ZipFile(package) as archive:
+        exported = archive.read("Space/Example.md").decode("utf-8")
+    body = exported.split("---", 2)[2]
+    rendered = BeautifulSoup(MarkdownIt("commonmark", {"html": True}).enable("table").render(body), "html.parser")
+    cells = rendered.select("tbody td")
+    assert len(cells) == 2
+    assert cells[0].get_text() == "1. 示例A2. 示例B"
+    assert len(cells[0].find_all("br")) == 1
+    assert cells[0].mark["style"] == "background: #ffebe6;"
+    assert cells[1].strong.get_text() == "阶段："
+    assert cells[1].get_text() == "阶段：继续"
+    assert cells[1].mark["style"] == "background: #e3fcef;"
